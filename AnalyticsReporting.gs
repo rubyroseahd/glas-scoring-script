@@ -8,7 +8,7 @@ function generateAllReports() {
     const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
     const data = dash.getDataRange().getValues();
     const headers = data[0];
-    const rows = data.slice(1);
+    const rows = data.slice(1).filter(r => r[0] !== ""); // Filter out empty rows
     if (rows.length === 0) throw new Error("No data found in Dashboard Matrix.");
     
     // Load Shopify Memory Map for Handle and Vendor lookups
@@ -47,7 +47,7 @@ function generateSummaryTab(rows, idx, shopifyMap) {
     if (!from || !to) return;
 
     const cost = parseFloat(r[idx["Resolved Cost Base"]]) || 0;
-    // Extract clean name (remove % Off text) for the key
+    // Extract clean name (remove % Off text) for the key, ensuring it's a string
     const cleanTo = to.split(" (")[0];
     const key = `${from} -> ${cleanTo}`;
 
@@ -171,7 +171,7 @@ function generateSupplierScorecard(rows, idx, shopifyMap) {
     const sku = r[idx["SKU Anchor Key"]];
     const vendor = shopifyMap.get(sku)?.vendor || "Unknown Vendor";
     const stockVal = (parseFloat(r[idx["Total On-Hand Warehouse Stock"]]) || 0) * (parseFloat(r[idx["Resolved Cost Base"]]) || 0);
-    const units90 = parseFloat(r[idx["Retail Velocity Score Component"]]) || 0; // Using score as proxy or pull raw
+    const units90 = parseFloat(r[idx["Retail Velocity Score Component"]]) || 0; // This is still the score, not raw units.
 
     if (!vendorTotals[vendor]) vendorTotals[vendor] = { skus: 0, stockValue: 0, sales90: 0 };
     vendorTotals[vendor].skus++;

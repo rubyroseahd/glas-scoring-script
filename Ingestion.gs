@@ -4,9 +4,11 @@
 
 function runDataIngestion() {
   try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
     
-    ingestShopify(folder);
+    // Pass spreadsheet object to avoid repeated calls
+    ingestShopify(folder, ss);
     ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA);
     ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB);
     ingestSalesCSV(folder);
@@ -24,7 +26,7 @@ function sanitize(val) {
   return String(val).trim().toUpperCase().replace(/[\r\n\t]+/g, "");
 }
 
-function ingestShopify(folder) {
+function ingestShopify(folder, ss) {
   const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SHOPIFY);
   if (!files.hasNext()) throw new Error("Shopify file missing");
   
@@ -50,7 +52,7 @@ function ingestShopify(folder) {
   }
 
   const outHeaders = ["SKU_ANCHOR", ...targetHeaders];
-  writeToHiddenTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [outHeaders, ...Array.from(map.values())]);
+  writeToHiddenTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [outHeaders, ...Array.from(map.values())], ss);
 }
 
 function ingestEEI(folder, fileName, tabName) {
@@ -72,7 +74,7 @@ function ingestEEI(folder, fileName, tabName) {
     return out;
   });
 
-  writeToHiddenTab(tabName, [["SKU_ANCHOR", ...targetHeaders], ...rows]);
+  writeToHiddenTab(tabName, [["SKU_ANCHOR", ...targetHeaders], ...rows], ss);
 }
 
 function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
@@ -90,7 +92,7 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
     return [sku, ...r];
   }).filter(r => r !== null);
 
-  writeToHiddenTab(tabName, [["SKU_ANCHOR", ...headers], ...rows]);
+  writeToHiddenTab(tabName, [["SKU_ANCHOR", ...headers], ...rows], ss);
 }
 
 /**
@@ -110,7 +112,7 @@ function ingestSalesCSV(folder) {
     return [sku, sku, safeNum(r[salesCol])];
   }).filter(r => r[0] !== "");
 
-  writeToHiddenTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows]);
+  writeToHiddenTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows], ss);
 }
 
 function executeCostResolutionWaterfall() {
@@ -148,11 +150,10 @@ function executeCostResolutionWaterfall() {
     resolved.push([sku, final]);
   });
 
-  writeToHiddenTab(VDM_CONFIG.TABS.MASTER_COST, resolved);
+  writeToHiddenTab(VDM_CONFIG.TABS.MASTER_COST, resolved, ss);
 }
 
-function writeToHiddenTab(name, data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function writeToHiddenTab(name, data, ss) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);

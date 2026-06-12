@@ -8,18 +8,18 @@ function executeDashboardRefresh() {
     const dashSheet = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
     
     // 1. Memory Load: Load all raw data into lookup objects
-    const shopifyData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
-    const salesData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SALES).getDataRange().getValues();
-    const usaData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_USA).getDataRange().getValues();
-    const webData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_WEB).getDataRange().getValues();
-    const costData = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_COST).getDataRange().getValues();
-    const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS).getDataRange().getValues();
+    const shopifyData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY)?.getDataRange().getValues() || [];
+    const salesData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SALES)?.getDataRange().getValues() || [];
+    const usaData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_USA)?.getDataRange().getValues() || [];
+    const webData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_WEB)?.getDataRange().getValues() || [];
+    const costData = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_COST)?.getDataRange().getValues() || [];
+    const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS)?.getDataRange().getValues() || [];
 
-    const sIdx = getHeaderMap(shopifyData[0]);
-    const vIdx = getHeaderMap(salesData[0]);
-    const uIdx = getHeaderMap(usaData[0]);
-    const wIdx = getHeaderMap(webData[0]);
-    const cIdx = getHeaderMap(costData[0]);
+    const sIdx = shopifyData.length > 0 ? getHeaderMap(shopifyData[0]) : {};
+    const vIdx = salesData.length > 0 ? getHeaderMap(salesData[0]) : {};
+    const uIdx = usaData.length > 0 ? getHeaderMap(usaData[0]) : {};
+    const wIdx = webData.length > 0 ? getHeaderMap(webData[0]) : {};
+    const cIdx = costData.length > 0 ? getHeaderMap(costData[0]) : {};
 
     const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]), safeNum(r[vIdx["Net items sold"]])]));
     const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]), r]));
@@ -27,18 +27,18 @@ function executeDashboardRefresh() {
     const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]), safeNum(r[cIdx["Resolved Cost"]])]));
     
     // Load Registries
-    const gwpSet = new Set(settingsData.map(r => safeStr(r[0]).toUpperCase()));
-    const launchSet = new Set(settingsData.map(r => safeStr(r[1]).toUpperCase()));
-    const mapBrands = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v);
+    const gwpSet = new Set(settingsData.slice(1).map(r => safeStr(r[0]).toUpperCase())); // Skip header row
+    const launchSet = new Set(settingsData.slice(1).map(r => safeStr(r[1]).toUpperCase())); // Skip header row
+    const mapBrands = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v); // Skip header row
     const affiliateRate = settingsData.length > 1 ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
 
     // Velocity Percentile Setup
-    const salesArray = Array.from(salesMap.values()).map(v => safeNum(v)).filter(v => v > 1).sort((a,b) => a-b);
+    const salesArray = Array.from(salesMap.values()).filter(v => v > 1).sort((a,b) => a-b);
 
     const results = [];
     shopifyData.slice(1).forEach(row => {
       const sku = row[0];
-      const vendor = safeStr(row[sIdx["Vendor"]]).toUpperCase();
+      const vendor = safeStr(row[sIdx["Vendor"]]).toUpperCase(); // Ensure vendor is always a string
       
       // A: SKU Anchor
       // B: Gatekeeper
@@ -55,7 +55,7 @@ function executeDashboardRefresh() {
       const curMarkdown = compareMSRP === price ? 0 : (compareMSRP - price) / compareMSRP;
       const curMargin = price === 0 ? 0 : (price - cost) / price;
       
-      // Velocity Score (I)
+      // Velocity Score (I) - Ensure sIdx["Net items sold"] is valid
       const units90 = safeNum(salesMap.get(sku));
       let vScore = 0;
       if (units90 === 1) {
@@ -138,7 +138,7 @@ function executeDashboardRefresh() {
     const headerRange = dashSheet.getRange(1, 1, 1, 26);
     headerRange.setValues([headers]);
     applyHeaderStyle(headerRange);
-    if (results.length > 0) {
+    if (results.length > 0 && results[0].length > 0) { // Ensure results array is not empty and has columns
       dashSheet.getRange(2, 1, results.length, 26).setValues(results);
       dashSheet.getRange(2, 1, results.length, 1).setNumberFormat("@");
     }

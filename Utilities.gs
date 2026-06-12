@@ -62,8 +62,9 @@ function safeStr(value) {
  */
 function getHeaderMap(headers) {
   return headers.reduce((acc, header, index) => {
-    if (header !== null && header !== undefined) {
-      acc[header.toString().trim()] = index;
+    if (header !== null && header !== undefined && header.toString().trim() !== "") { // Ensure header is not empty
+      // Enforce uppercase keys for case-insensitive lookup robustness
+      acc[header.toString().trim().toUpperCase()] = index;
     }
     return acc;
   }, {});

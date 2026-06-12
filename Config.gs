@@ -18,7 +18,7 @@ const VDM_CONFIG = {
     // User-Facing
     BRIEF: "[00] Executive Brief", 
     ACTION: "[00] Action Items & Sign-off", 
-    SETTINGS: "[01] Settings & Registries", 
+    SETTINGS: "[01] Settings & Registries",
     DASHBOARD: "[02] Dashboard Matrix", 
     SUMMARY: "[03] Tier Summary & Distribution Panel", 
     SCORECARD: "[01] Supplier Scorecard & Capital Velocity", 
@@ -54,7 +54,7 @@ const VDM_CONFIG = {
   HEADERS: {
     SHOPIFY: ["Variant SKU", "Handle", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"],
     USA_WAREHOUSE: ["Item Code", "EEI USA Warehouse On Hand Stock", "Sales Past 30 Days"],
-    WEB_WAREHOUSE: ["Item Code", "EEI Web Warehouse On Hand Stock", "Sales Past 30 days"], // Note lowercase 'd'
+    WEB_WAREHOUSE: ["Item Code", "EEI Web Warehouse On Hand Stock", "Sales Past 30 days"], // Corrected case for 'days'
     RETAIL_VELOCITY: ["Product variant SKU", "Net items sold"],
     COST_WATERFALL: ["SKU", "EEI LAST PURCHASE PRICE", "GLAS Costing", "COTR LAST PURCHASE PRICE"]
   }
