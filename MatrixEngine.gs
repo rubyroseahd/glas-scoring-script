@@ -5,14 +5,121 @@
 function executeDashboardRefresh() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
-    const shopify = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
-    const shopifyData = shopify.getDataRange().getValues();
+    const dashSheet = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
     
-    if (shopifyData.length < 2) return;
-    const skus = shopifyData.slice(1).map(r => [r[0]]);
+    // 1. Memory Load: Load all raw data into lookup objects
+    const shopifyData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
+    const salesData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SALES).getDataRange().getValues();
+    const usaData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_USA).getDataRange().getValues();
+    const webData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_WEB).getDataRange().getValues();
+    const costData = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_COST).getDataRange().getValues();
+    const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS).getDataRange().getValues();
+
+    const sIdx = getHeaderMap(shopifyData[0]);
+    const vIdx = getHeaderMap(salesData[0]);
+    const uIdx = getHeaderMap(usaData[0]);
+    const wIdx = getHeaderMap(webData[0]);
+    const cIdx = getHeaderMap(costData[0]);
+
+    const salesMap = new Map(salesData.slice(1).map(r => [r[0], r[vIdx["Net items sold"]]]));
+    const usaMap = new Map(usaData.slice(1).map(r => [r[0], r]));
+    const webMap = new Map(webData.slice(1).map(r => [r[0], r[wIdx["EEI Web Warehouse On Hand Stock"]]]));
+    const costMap = new Map(costData.slice(1).map(r => [r[0], r[cIdx["Resolved Cost"]]]));
     
-    dash.clear().clearFormats();
+    // Load Registries
+    const gwpSet = new Set(settingsData.map(r => sanitize(r[0])));
+    const launchSet = new Set(settingsData.map(r => sanitize(r[1])));
+    const mapBrands = settingsData.slice(1).map(r => String(r[2]).toUpperCase()).filter(v => v);
+    const affiliateRate = parseFloat(settingsData[1][4]) || 0;
+
+    // Velocity Percentile Setup
+    const salesArray = Array.from(salesMap.values()).map(v => parseFloat(v) || 0).filter(v => v > 1).sort((a,b) => a-b);
+
+    const results = [];
+    shopifyData.slice(1).forEach(row => {
+      const sku = row[0];
+      const vendor = String(row[sIdx["Vendor"]]).toUpperCase();
+      
+      // A: SKU Anchor
+      // B: Gatekeeper
+      let gate = "None";
+      if (gwpSet.has(sku)) gate = "⚠️ Active GWP Promo";
+      else if (launchSet.has(sku)) gate = "New Launch";
+      else if (mapBrands.some(b => vendor.includes(b))) gate = "3rd Party MAP";
+
+      const fulfillment = row[sIdx["Fulfillment service"]] || "SHARED";
+      const cost = parseFloat(costMap.get(sku)) || 0;
+      const price = parseFloat(row[sIdx["Variant Price"]]) || 0;
+      const rawCompare = parseFloat(row[sIdx["Variant Compare At Price"]]) || 0;
+      const compareMSRP = (rawCompare === 0 || isNaN(rawCompare)) ? price : rawCompare;
+      const curMarkdown = compareMSRP === price ? 0 : (compareMSRP - price) / compareMSRP;
+      const curMargin = price === 0 ? 0 : (price - cost) / price;
+      
+      // Velocity Score (I)
+      const units90 = parseFloat(salesMap.get(sku)) || 0;
+      let vScore = 0;
+      if (units90 === 1) vScore = 1;
+      else if (units90 > 1) {
+        const rank = salesArray.filter(v => v < units90).length / (salesArray.length - 1);
+        if (rank >= 0.80) vScore = 4;
+        else if (rank >= 0.55) vScore = 3;
+        else vScore = 2;
+      }
+
+      // Margin Score (J)
+      let mScore = 0;
+      if (curMargin >= 0.55) mScore = 3;
+      else if (curMargin >= 0.45) mScore = 2;
+      else if (curMargin >= 0.35) mScore = 1;
+
+      // Stock Score (K)
+      const webStock = parseFloat(webMap.get(sku)) || 0;
+      let sScore = (fulfillment === "WEBONLY") ? 2 : 0;
+      if (fulfillment !== "WEBONLY") {
+        const dos = units90 === 0 ? 999 : webStock / (units90 / 90);
+        if (dos <= 30) sScore = 3;
+        else if (dos <= 120) sScore = 2;
+        else if (dos <= 180) sScore = 1;
+      }
+
+      const totalScore = vScore + mScore + sScore;
+      
+      // Tiers & Logic (M, N)
+      let tier = "Clearance/Archive (65% Off)";
+      let vdmMarkdown = 0.65;
+      if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; }
+      else if (gate === "3rd Party MAP") { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; }
+      else if (totalScore === 10) { tier = "Top Hero (0% Off)"; vdmMarkdown = 0; }
+      else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; }
+      else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; }
+      else if (totalScore >= 4) { tier = "Accelerator (50% Off)"; vdmMarkdown = 0.50; }
+
+      const usaRow = usaMap.get(sku) || [0,0,0,0];
+      const usaStock = parseFloat(usaRow[uIdx["EEI USA Warehouse On Hand Stock"]]) || 0;
+      const totalStock = usaStock + webStock;
+      const shopifyQty = parseFloat(row[sIdx["Variant Inventory Qty"]]) || 0;
+      const propPrice = compareMSRP * (1 - vdmMarkdown);
+      const simNet = propPrice * (1 - affiliateRate);
+      const stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
+      const guardrail = stackMargin < 0.20 ? "❌ BLOCKED" : "✓ SAFE";
+      
+      const curTierLabel = curMarkdown === 0 ? "Full MSRP" : (curMarkdown <= 0.19 ? "Promo Tier 1 (10-15%)" : (curMarkdown <= 0.35 ? "Promo Tier 2 (20-25%)" : (curMarkdown <= 0.55 ? "Promo Tier 3 (40-50%)" : "Clearance")));
+      
+      // X: Governance Override
+      const b2b30DSales = parseFloat(usaRow[uIdx["Sales Past 30 Days"]]) || 0;
+      let migration = (vdmMarkdown > curMarkdown) ? "🚨 Deepen Discount" : "📈 Price Recovery/Lift";
+      if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
+      if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= 500 && b2b30DSales > 0) {
+        migration = "⚠️ HOLD: B2B Volume Stable";
+      }
+
+      results.push([
+        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - price, stackMargin - curMargin
+      ]);
+    });
+
+    // 2. Batch Write
+    dashSheet.clear().clearFormats();
     const headers = [
       "SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price",
       "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Retail Velocity Score Component",
@@ -23,57 +130,16 @@ function executeDashboardRefresh() {
       "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"
     ];
     
-    const headerRange = dash.getRange(1, 1, 1, 26);
+    const headerRange = dashSheet.getRange(1, 1, 1, 26);
     headerRange.setValues([headers]);
     applyHeaderStyle(headerRange);
-    dash.getRange(2, 1, skus.length, 1).setValues(skus).setNumberFormat("@");
-
-    const ctrl = `'${VDM_CONFIG.TABS.SETTINGS}'`;
-    const rShop = VDM_CONFIG.TABS.RAW_SHOPIFY;
-    const rSales = VDM_CONFIG.TABS.RAW_SALES;
-    const rUsa = VDM_CONFIG.TABS.RAW_EEI_USA;
-    const rWeb = VDM_CONFIG.TABS.RAW_EEI_WEB;
-    const rCost = VDM_CONFIG.TABS.MASTER_COST;
-
-    // Define Column Letters for Internal Formula References
-    const COL = { SKU: 'A', GATE: 'B', FULFILL: 'C', COST: 'D', PRICE: 'E', MSRP: 'F', MKDN: 'G', MARG: 'H', VEL: 'I', STK: 'K', TOTAL: 'L', TIER: 'M', TARGET_MKDN: 'N', WH_TOTAL: 'O', WH_WEB: 'P', SHOP_QTY: 'Q', PROP_PRICE: 'S', NET_SIM: 'T', STACK_MARG: 'U', GUARD: 'V', CUR_TIER: 'W' };
-
-    const formulas = skus.map((_, i) => {
-      const r = i + 2;
-      const sku = `${COL.SKU}${r}`;
-
-      return [
-        `=IFS(ISNUMBER(MATCH(${sku}, ${ctrl}!$A:$A, 0)), "⚠️ Active GWP Promo", ISNUMBER(MATCH(${sku}, ${ctrl}!$B:$B, 0)), "New Launch", SUMPRODUCT(--ISNUMBER(SEARCH(${ctrl}!$C$2:$C$50, VLOOKUP(${sku}, ${rShop}!$A:$G, 7, 0)))), "3rd Party MAP", TRUE, "None")`,
-        `=IFERROR(VLOOKUP(${sku}, ${rShop}!$A:$I, 2, 0), "SHARED")`,
-        `=VLOOKUP(${sku}, ${rCost}!$A:$B, 2, 0)`,
-        `=VLOOKUP(${sku}, ${rShop}!$A:$I, 5, 0)`,
-        `=IF(OR(ISBLANK(VLOOKUP(${sku}, ${rShop}!$A:$I, 6, 0)), VLOOKUP(${sku}, ${rShop}!$A:$I, 6, 0)=0), ${COL.PRICE}${r}, VLOOKUP(${sku}, ${rShop}!$A:$I, 6, 0))`,
-        `=IF(${COL.MSRP}${r}=${COL.PRICE}${r}, 0, (${COL.MSRP}${r} - ${COL.PRICE}${r}) / ${COL.MSRP}${r})`,
-        `=IFERROR((${COL.PRICE}${r} - ${COL.COST}${r}) / ${COL.PRICE}${r}, 0)`,
-        `=IF(IFERROR(VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0), 0)=0, 0, IF(VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0)=1, 1, IF(PERCENTRANK.INC(FILTER(${rSales}!$C$2:$C, ${rSales}!$C$2:$C>1), VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0))>=0.80, 4, IF(PERCENTRANK.INC(FILTER(${rSales}!$C$2:$C, ${rSales}!$C$2:$C>1), VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0))>=0.55, 3, 2))))`,
-        `=IFERROR(IFS(${COL.MARG}${r}>=0.55, 3, ${COL.MARG}${r}>=0.45, 2, ${COL.MARG}${r}>=0.35, 1, TRUE, 0), 0)`,
-        `=IF(${COL.FULFILL}${r}="WEBONLY", 2, LET(sls, IFERROR(VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0), 0), dos, IF(sls=0, 999, ${COL.WH_WEB}${r}/(sls/90)), IFS(dos<=30, 3, dos<=120, 2, dos<=180, 1, TRUE, 0)))`,
-        `=SUM(${COL.VEL}${r}, J${r}, K${r})`,
-        `=IFS(${COL.GATE}${r}="New Launch", "New Launch (0% Hold)", ${COL.GATE}${r}="3rd Party MAP", "3rd Party MAP Review (0% Hold)", ${COL.TOTAL}${r}=10, "Top Hero (0% Off)", ${COL.TOTAL}${r}>=8, "Signature Hero (30% Off)", ${COL.TOTAL}${r}>=6, "Proven Performer (40% Off)", ${COL.TOTAL}${r}>=4, "Accelerator (50% Off)", TRUE, "Clearance/Archive (65% Off)")`,
-        `=IF(${COL.TIER}${r}="Signature Hero (30% Off)", 0.30, IF(${COL.TIER}${r}="Proven Performer (40% Off)", 0.40, IF(${COL.TIER}${r}="Accelerator (50% Off)", 0.50, IF(${COL.TIER}${r}="Clearance/Archive (65% Off)", 0.65, 0))))`,
-        `=IFERROR(VLOOKUP(${sku}, ${rUsa}!$A:$M, 3, 0), 0) + IFERROR(VLOOKUP(${sku}, ${rWeb}!$A:$M, 3, 0), 0)`,
-        `=IFERROR(VLOOKUP(${sku}, ${rWeb}!$A:$M, 3, 0), 0)`,
-        `=IFERROR(VLOOKUP(${sku}, ${rShop}!$A:$Z, 9, 0), 0)`,
-        `=Q${r} - P${r}`,
-        `=F${r} * (1 - N${r})`,
-        `=S${r} * (1 - ${ctrl}!$E$2)`,
-        `=IFERROR((T${r} - D${r}) / T${r}, 0)`,
-        `=IF(U${r}<0.20, "❌ BLOCKED", "✓ SAFE")`,
-        `=IFS(G${r}=0, "Full MSRP", G${r}<=0.19, "Promo Tier 1 (10-15%)", G${r}<=0.35, "Promo Tier 2 (20-25%)", G${r}<=0.55, "Promo Tier 3 (40-50%)", TRUE, "Clearance")`,
-        `=IFS(W${r}=LEFT(M${r}, LEN(W${r})), "✓ Price Hold", AND(C${r}="SHARED", OR(LEFT(M${r},9)="Clearance", LEFT(M${r},11)="Accelerator"), IFERROR(VLOOKUP(A${r}, ${rUsa}!$A:$M, 3, 0), 0)>=500, IFERROR(VLOOKUP(A${r}, ${rUsa}!$A:$O, 4, 0), 0)>0), "⚠️ HOLD: B2B Volume Stable", N${r}>G${r}, "🚨 Deepen Discount", TRUE, "📈 Price Recovery/Lift")`,
-        `=S${r} - E${r}`,
-        `=U${r} - H${r}`
-      ];
-    });
-
-    dash.getRange(2, 2, formulas.length, 25).setFormulas(formulas);
-    applyConditionalFormatting(dash, formulas.length);
-    dash.setFrozenRows(1);
+    if (results.length > 0) {
+      dashSheet.getRange(2, 1, results.length, 26).setValues(results);
+      dashSheet.getRange(2, 1, results.length, 1).setNumberFormat("@");
+    }
+    
+    applyConditionalFormatting(dashSheet, results.length);
+    dashSheet.setFrozenRows(1);
   } catch (e) {
     logError("MatrixEngine", e);
   }

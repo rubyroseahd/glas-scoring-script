@@ -65,26 +65,30 @@ function generateSyncAudit(rows, idx) {
   sheet.clear().clearFormats();
 
   const headers = ["SKU", "Handle", "Action", "Final Tier", "Final Discount", "Old Variant Price", "Old Compare At Price", "Base Price Used", "New Variant Price", "New Compare At Price", "Note"];
-  const formulas = rows.map((_, i) => {
-    const r = i + 2;
+  const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
+  const sMap = new Map(shopifyRaw.slice(1).map(r => [r[0], r[1]])); // SKU to Handle
+
+  const syncRows = rows.map(r => {
+    const sku = r[idx["SKU Anchor Key"]];
+    const mkdn = parseFloat(r[idx["VDM Markdown Depth %"]]) || 0;
     return [
-      `='${dashName}'!A${r}`,
-      `=IFERROR(VLOOKUP(A${r}, _raw_shopify!$A:$ZZ, ${handleCol}, 0), "")`,
-      `='${dashName}'!X${r}`,
-      `='${dashName}'!M${r}`,
-      `='${dashName}'!N${r}`,
-      `='${dashName}'!E${r}`,
-      `='${dashName}'!F${r}`,
-      `='${dashName}'!F${r}`,
-      `='${dashName}'!S${r}`,
-      `=IF('${dashName}'!N${r}=0, "", '${dashName}'!F${r})`,
-      `=""`
+      sku,
+      sMap.get(sku) || "",
+      r[idx["Pricing Migration Status"]],
+      r[idx["Target Strategic Tier"]],
+      mkdn,
+      r[idx["Live Storefront Price"]],
+      r[idx["Live Compare MSRP"]],
+      r[idx["Live Compare MSRP"]],
+      r[idx["New Proposed Storefront Price"]],
+      mkdn === 0 ? "" : r[idx["Live Compare MSRP"]],
+      ""
     ];
   });
 
   sheet.getRange(1, 1, 1, 11).setValues([headers]);
   applyHeaderStyle(sheet.getRange(1, 1, 1, 11));
-  sheet.getRange(2, 1, formulas.length, 11).setFormulas(formulas);
+  if (syncRows.length > 0) sheet.getRange(2, 1, syncRows.length, 11).setValues(syncRows);
 }
 
 function generateMasterLedger(rows, idx) {

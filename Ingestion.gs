@@ -29,28 +29,24 @@ function ingestShopify(folder) {
   if (!files.hasNext()) throw new Error("Shopify file missing");
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  const headers = data[0];
-  const handleIdx = headers.indexOf("Handle");
-  const skuIdx = headers.indexOf("Variant SKU");
-  const statusIdx = headers.indexOf("Status");
-  const priceIdx = headers.indexOf("Variant Price");
-  const compareIdx = headers.indexOf("Variant Compare At Price");
-  const vendorIdx = headers.indexOf("Vendor");
-  const fulfillIdx = headers.indexOf("Fulfillment service");
-  const qtyIdx = headers.indexOf("Variant Inventory Qty");
-  const costIdx = headers.indexOf("Cost per item");
+  const hMap = getHeaderMap(data[0]);
+  const targetHeaders = VDM_CONFIG.HEADERS.SHOPIFY;
 
   const map = new Map();
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    const sku = sanitize(row[skuIdx]);
-    if (sku && row[statusIdx].toLowerCase() === "active" && !map.has(sku)) {
-      // Structure: Anchor, Handle, SKU, Status, Price, Compare, Fulfill, Vendor, Qty, ShopifyCost
-      map.set(sku, [sku, row[handleIdx], sku, row[statusIdx], row[priceIdx], row[compareIdx], row[fulfillIdx], row[vendorIdx], row[qtyIdx], row[costIdx]]);
+    const sku = sanitize(row[hMap["Variant SKU"]]);
+    const status = (row[hMap["Status"]] || "").toLowerCase();
+    
+    if (sku && status === "active" && !map.has(sku)) {
+      // Map row to the exact sequence in outHeaders
+      const processedRow = [sku]; // Column A Anchor
+      targetHeaders.forEach(h => processedRow.push(row[hMap[h]]));
+      map.set(sku, processedRow);
     }
   }
 
-  const outHeaders = ["SKU_ANCHOR", "Handle", "Variant SKU", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"];
+  const outHeaders = ["SKU_ANCHOR", ...targetHeaders];
   writeToHiddenTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [outHeaders, ...Array.from(map.values())]);
 }
 
@@ -59,20 +55,18 @@ function ingestEEI(folder, fileName, tabName) {
   if (!files.hasNext()) throw new Error(`${fileName} missing`);
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  const headers = data[4]; // Row 5 calibration
-  const hMap = getHeaderMap(headers);
+  const hRow = data[4]; 
+  const hMap = getHeaderMap(hRow);
+  const targetHeaders = tabName === VDM_CONFIG.TABS.RAW_EEI_USA ? VDM_CONFIG.HEADERS.USA_WAREHOUSE : VDM_CONFIG.HEADERS.WEB_WAREHOUSE;
   
-  const skuIdx = hMap["Item Code"];
-  // Resiliency: Search for specific warehouse header, fallback to Col L (index 11)
-  const stockIdx = headers.findIndex(h => h.includes("On Hand Stock")) !== -1 ? headers.findIndex(h => h.includes("On Hand Stock")) : 11;
-  const salesIdx = hMap["Sales Past 30 Days"];
-
   const rows = data.slice(5).map(r => {
-    const sku = sanitize(r[skuIdx]);
-    return [sku, sku, r[stockIdx], r[salesIdx] || 0];
+    const sku = sanitize(r[hMap["Item Code"]]);
+    const out = [sku];
+    targetHeaders.forEach(h => out.push(r[hMap[h]]));
+    return out;
   });
 
-  writeToHiddenTab(tabName, [["SKU_ANCHOR", "Item Code", "On Hand", "Sales 30D"], ...rows]);
+  writeToHiddenTab(tabName, [["SKU_ANCHOR", ...targetHeaders], ...rows]);
 }
 
 function ingestGenericCSV(folder, fileName, tabName, skuHeader) {

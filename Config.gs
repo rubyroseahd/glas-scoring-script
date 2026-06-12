@@ -48,7 +48,16 @@ const VDM_CONFIG = {
     ALERT_LAUNCH_TEXT: "#137333"
   },
 
-  HOUSE_BRANDS: ["Gläs", "glastoy", "GLASTOY"]
+  HOUSE_BRANDS: ["Gläs", "glastoy", "GLASTOY"],
+
+  // Header String Registry for dynamic matching
+  HEADERS: {
+    SHOPIFY: ["Variant SKU", "Handle", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"],
+    USA_WAREHOUSE: ["Item Code", "EEI USA Warehouse On Hand Stock", "Sales Past 30 Days"],
+    WEB_WAREHOUSE: ["Item Code", "EEI Web Warehouse On Hand Stock", "Sales Past 30 days"], // Note lowercase 'd'
+    RETAIL_VELOCITY: ["Product variant SKU", "Net items sold"],
+    COST_WATERFALL: ["SKU", "EEI LAST PURCHASE PRICE", "GLAS Costing", "COTR LAST PURCHASE PRICE"]
+  }
 };
 
 function logError(module, error) {

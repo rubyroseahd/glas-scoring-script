@@ -27,7 +27,7 @@ function getOrCreateSheet(sheetName, isHidden = false) {
  */
 function sanitizeKey(key) {
   if (key === null || key === undefined) return "";
-  return String(key).trim().toUpperCase().replace(/[\r\n]+/g, "");
+  return String(key).trim().toUpperCase().replace(/[\r\n\t]+/g, "");
 }
 
 /**
