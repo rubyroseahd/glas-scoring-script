@@ -68,7 +68,7 @@ function refreshDashboardMatrix() {
         `=IF(OR(ISBLANK(VLOOKUP(A${r}, ${rShop}!$A:$ZZ, ${sIdx["Variant Compare At Price"] + 1}, 0)), VLOOKUP(A${r}, ${rShop}!$A:$ZZ, ${sIdx["Variant Compare At Price"] + 1}, 0)=0), E${r}, VLOOKUP(A${r}, ${rShop}!$A:$ZZ, ${sIdx["Variant Compare At Price"] + 1}, 0))`,
         `=IF(F${r}=E${r}, 0, (F${r} - E${r}) / F${r})`,
         `=IFERROR((E${r} - D${r}) / E${r}, 0)`,
-        `=IFERROR(IF(VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0)<=1, 1, PERCENTRANK.INC(FILTER(${rSales}!$D$2:$D, ${rSales}!$D$2:$D>1), VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0))*4), 0)`,
+        `=IFERROR(IF(VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0)<=1, 1, PERCENTRANK.INC(FILTER(INDEX(${rSales}!$A:$ZZ, 0, ${rSalesIdx["Net items sold"] + 1}), INDEX(${rSales}!$A:$ZZ, 0, ${rSalesIdx["Net items sold"] + 1})>1), VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0))*4), 0)`,
         `=IFERROR(IFS(H${r}>=0.55, 3, H${r}>=0.45, 2, H${r}>=0.35, 1, TRUE, 0), 0)`,
         // ALIGNMENT: Stock Score Component logic to strictly match manual v2.2.2 DoS tiers
         `=IF(C${r}="WEBONLY", 2, IFS(IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0)/90), 999)>180, 0, IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0)/90), 999)>=121, 1, IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$ZZ, ${rSalesIdx["Net items sold"] + 1}, 0)/90), 999)>=31, 2, TRUE, 3))`,
@@ -90,7 +90,6 @@ function refreshDashboardMatrix() {
       ];
     });
 
-    // Single Atomic Write for all formulas (Columns B through Z) (Fix 3: Pass VDM_CONFIG.DESIGN)
     // Single Atomic Write for all formulas (Columns B through Z)
     dash.getRange(2, 2, formulaMatrix.length, 25).setFormulas(formulaMatrix);
 

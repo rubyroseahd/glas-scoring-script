@@ -3,90 +3,69 @@
  * Executive Summaries, Presentation Dashboards & Sync Audits
  */
 
-function generateExecutiveSummary(dashRows, dIdx) { // Fix 1: Accept arguments
+function generateExecutiveSummary(dashRows, dIdx) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    // const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD); // No longer needed
-    // const dashData = dash.getDataRange().getValues(); // No longer needed
-    // const dashHeaders = dashData[0]; // No longer needed
-    const rows = dashRows; // Use passed argument
-
-    // Block 1: Global Tier Migration Matrix
-    const migrationMatrix = {};
-    rows.forEach(r => {
-      // Aligned with MatrixEngine.gs headers
-      const from = r[dIdx["Current Equivalent Storefront Tier"]] || "N/A";
-      const to = r[dIdx["Target Strategic Tier"]]; 
-      const cost = parseFloat(r[dIdx["Resolved Cost Base"]]) || 0; 
-      
-      const key = `${from} -> ${to}`;
-      if (!migrationMatrix[key]) migrationMatrix[key] = { count: 0, costImpact: 0 };
-      migrationMatrix[key].count++;
-      migrationMatrix[key].costImpact += cost;
-    });
-
     const summarySheet = getOrCreateSheet(VDM_CONFIG.TABS.SUMMARY);
     summarySheet.clear();
-    summarySheet.getRange("A1:C1").setValues([["Migration Coordinate", "SKU Frequency", "Invoiced Asset Cost"]])
-      .setBackground("#000000").setFontColor("#FFFFFF").setFontWeight("bold");
-    
-    const migrationRows = Object.keys(migrationMatrix).map(k => [k, migrationMatrix[k].count, migrationMatrix[k].costImpact]);
-    if (migrationRows.length > 0) {
-      summarySheet.getRange(2, 1, migrationRows.length, 3).setValues(migrationRows);
-    }
 
-    // Block 2: Dedicated GLAS Summary Block
-    const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
-    const shopifyData = shopifyRaw.getDataRange().getValues();
-    const shopHeaders = shopifyData[0];
-    const sIdx = getHeaderMap(shopHeaders);
+    const tiers = ['Top Hero', 'Signature Hero', 'Proven Performers', 'Accelerators', 'Clearance', 'New Launch', 'Excluded', 'Archive'];
+    const summaryData = {};
+    tiers.forEach(t => summaryData[t] = { skus: 0, shared: 0, b2b: 0, web: 0, depth: 0 });
+    const channels = { 'SHARED': 0, 'B2BONLY': 0, 'WEBONLY': 0 };
 
-    const vendorMap = {};
-    // Fix 1: Corrected vendorMap creation - map SKU to Vendor Name
-    shopifyData.slice(1).forEach(r => {
-      const itemSku = sanitizeKey(r[sIdx["Variant SKU"]]);
-      if (itemSku) {
-        vendorMap[itemSku] = r[sIdx["Vendor"]];
+    dashRows.forEach(r => {
+      const tierStr = r[dIdx["Target Strategic Tier"]] || "";
+      const gatekeeper = r[dIdx["Gatekeeper Status"]] || "";
+      const fulfillment = r[dIdx["Fulfillment Tag"]] || "";
+
+      let bucket = 'Archive';
+      if (gatekeeper === "New Launch") bucket = 'New Launch';
+      else if (gatekeeper === "⚠️ Active GWP Promo") bucket = 'Excluded';
+      else if (tierStr.includes("Top Hero")) bucket = 'Top Hero';
+      else if (tierStr.includes("Signature Hero")) bucket = 'Signature Hero';
+      else if (tierStr.includes("Proven Performer")) bucket = 'Proven Performers';
+      else if (tierStr.includes("Accelerator")) bucket = 'Accelerators';
+      else if (tierStr.includes("Clearance")) bucket = 'Clearance';
+      else if (tierStr.includes("Archive")) bucket = 'Archive';
+
+      if (summaryData[bucket]) {
+        summaryData[bucket].skus++;
+        if (fulfillment === "SHARED") summaryData[bucket].shared++;
+        else if (fulfillment === "B2BONLY") summaryData[bucket].b2b++;
+        else if (fulfillment === "WEBONLY") summaryData[bucket].web++;
+        summaryData[bucket].depth = r[dIdx["VDM Markdown Depth %"]] || 0;
       }
+      if (channels[fulfillment] !== undefined) channels[fulfillment]++;
     });
 
-    const glasSummary = {};
-    rows.forEach(r => {
-      const sku = r[dIdx["SKU Anchor Key"]];
-      const vendor = (vendorMap[sku] || "").toLowerCase();
-      const isHouseBrand = VDM_CONFIG.HOUSE_BRANDS.some(hb => vendor.includes(hb.toLowerCase()));
+    const controlSheet = ss.getSheetByName(VDM_CONFIG.TABS.CONTROL);
+    const affiliateRate = controlSheet ? controlSheet.getRange("E2").getValue() : 0;
+    const totalSkus = dashRows.length;
 
-      if (isHouseBrand) {
-        const tier = r[dIdx["Target Strategic Tier"]];
-        if (!glasSummary[tier]) glasSummary[tier] = { count: 0, shared: 0, webOnly: 0, vdmSum: 0, netSum: 0 };
-        
-        glasSummary[tier].count++;
-        if (r[dIdx["Fulfillment Tag"]] === "SHARED") glasSummary[tier].shared++;
-        if (r[dIdx["Fulfillment Tag"]] === "WEBONLY") glasSummary[tier].webOnly++;
-        glasSummary[tier].vdmSum += parseFloat(r[dIdx["VDM Markdown Depth %"]]) || 0;
-        glasSummary[tier].netSum += (1 - (parseFloat(r[dIdx["Live Storefront Price"]]) / parseFloat(r[dIdx["Live Compare MSRP"]]))) || 0;
-      }
+    const outputTable = [["Tier", "Total SKUs", "Shared", "B2B Only", "Web Only", "% Of Total", "Max Discount", "Affiliate ", "Final Discount", "", "Discount Tier", ""]];
+
+    tiers.forEach(t => {
+      const d = summaryData[t];
+      const pctOfTotal = totalSkus > 0 ? d.skus / totalSkus : 0;
+      outputTable.push([
+        t, d.skus, d.shared, d.b2b, d.web, pctOfTotal, d.depth, affiliateRate, d.depth + affiliateRate, "", t, ""
+      ]);
     });
 
-    const startRow = migrationRows.length + 4;
-    const glasHeaders = [["House Strategic Tier", "Total SKUs", "Shared", "Web-Only", "% of Total", "VDM Discount %", "Affiliate Rate", "Final Stacked %"]];
-    summarySheet.getRange(startRow, 1, 1, 8).setValues(glasHeaders).setBackground("#000000").setFontColor("#FFFFFF").setFontWeight("bold");
+    summarySheet.getRange(1, 1, outputTable.length, 12).setValues(outputTable);
+    applyHeaderStyle(summarySheet.getRange(1, 1, 1, 12));
+    summarySheet.getRange(2, 6, tiers.length, 1).setNumberFormat("0.00%");
+    summarySheet.getRange(2, 7, tiers.length, 3).setNumberFormat("0%");
 
-    const totalHouse = Object.values(glasSummary).reduce((a, b) => a + b.count, 0);
-    const affiliateRate = ss.getSheetByName(VDM_CONFIG.TABS.CONTROL).getRange("E2").getValue();
-
-    const glasRows = Object.keys(glasSummary).map(tier => {
-      const t = glasSummary[tier];
-      return [
-        tier, t.count, t.shared, t.webOnly, totalHouse > 0 ? t.count / totalHouse : 0, 
-        t.count > 0 ? t.vdmSum / t.count : 0, affiliateRate, t.count > 0 ? t.netSum / t.count : 0
-      ];
-    });
-
-    if (glasRows.length > 0) {
-      summarySheet.getRange(startRow + 1, 1, glasRows.length, 8).setValues(glasRows);
-      summarySheet.getRange(startRow + 1, 5, glasRows.length, 4).setNumberFormat("0.00%");
-    }
+    const channelRow = outputTable.length + 3;
+    summarySheet.getRange(channelRow, 1, 1, 2).setValues([["Channel Class", "Total SKUs"]]);
+    applyHeaderStyle(summarySheet.getRange(channelRow, 1, 1, 2));
+    summarySheet.getRange(channelRow + 1, 1, 3, 2).setValues([
+      ["SHARED", channels["SHARED"]],
+      ["B2BONLY", channels["B2BONLY"]],
+      ["WEBONLY", channels["WEBONLY"]]
+    ]);
 
     // These functions are now called from runFullRefreshCycle with the correct arguments
     // buildStorefrontSyncAudit(rows, dIdx);
@@ -194,56 +173,6 @@ function generateMAPComplianceReport(rows) {
   if (mapRows.length > 0) sheet.getRange(2, 1, mapRows.length, 3).setValues(mapRows);
 }
 
-function buildStorefrontSyncAudit(dashRows, dIdx) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const syncSheet = getOrCreateSheet(VDM_CONFIG.TABS.SYNC);
-  syncSheet.clear(); // Clear before writing
-
-  const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
-  const shopifyData = shopifyRaw.getDataRange().getValues();
-  const sIdx = getHeaderMap(shopifyData[0]);
-
-  const handleMap = {};
-  shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[sIdx["Variant SKU"]])] = r[sIdx["Handle"]]);
-
-  // Ensure dashRows is not empty before mapping
-  if (dashRows.length === 0) return;
-
-  const syncAuditData = dashRows.map(r => {
-    const sku = r[dIdx["SKU Anchor Key"]];
-    const discountDepth = r[dIdx["VDM Markdown Depth %"]];
-    const status = r[dIdx["Pricing Migration Status"]] || "";
-    return [
-      sku,                                // Col 1: SKU
-      handleMap[sku] || "",               // Col 2: Handle
-      status.includes("✓") ? "NO CHANGE" : "UPDATED", // Col 3: Action
-      r[dIdx["Target Strategic Tier"]],   // Col 4: Final Tier
-      discountDepth,                      // Col 5: Final Discount
-      r[dIdx["Live Storefront Price"]],   // Col 6: Old Variant Price
-      r[dIdx["Live Compare MSRP"]],       // Col 7: Old Compare At Price
-      r[dIdx["Live Compare MSRP"]],       // Col 8: Base Price Used
-      r[dIdx["New Proposed Storefront Price"]], // Col 9: New Variant Price
-      discountDepth > 0 ? r[dIdx["Live Compare MSRP"]] : "", // Col 10: New Compare At Price
-      r[dIdx["Profit Guardrail Status Alert"]] // Col 11: Note / Guardrail
-    ];
-  });
-
-  const headers = [["SKU", "Handle", "Action", "Final Tier", "Final Discount", "Old Price", "Old Compare", "Base MSRP", "New Price", "New Compare", "Note"]];
-  syncSheet.getRange(1, 1, 1, 11).setValues(headers);
-  applyHeaderStyle(syncSheet.getRange(1, 1, 1, 11)); // Fix 3: Use applyHeaderStyle
-  syncSheet.getRange(2, 1, syncAuditData.length, 11).setValues(syncAuditData);
-  
-  // Note/Guardrail Highlighting
-  const range = syncSheet.getRange(2, 11, syncAuditData.length, 1);
-  const rule = SpreadsheetApp.newConditionalFormatRule()
-    .whenTextEqualTo("❌ BLOCKED")
-    .setBackground(VDM_CONFIG.DESIGN.ALERT_BREACH_BG)
-    .setFontColor(VDM_CONFIG.DESIGN.ALERT_BREACH_TEXT)
-    .setRanges([range])
-    .build();
-  syncSheet.setConditionalFormatRules([rule]);
-}
-
 /**
  * NEW: Generates the Master Pricing & Margin Ledger presentation tab.
  */
@@ -329,9 +258,7 @@ function runFullRefreshCycle() {
       if (itemSku) vendorMap[itemSku] = r[sIdx["Vendor"]];
     });
 
-    // --- Execute all modules with correct arguments ---
     generateExecutiveSummary(rows, dIdx);
-    buildStorefrontSyncAudit(rows, dIdx);
     logPricingElasticitySnapshot(rows, dIdx);
     generateSupplierScorecard(rows, vendorMap);
     generateWarehouseAgingReport(rows);
@@ -342,7 +269,5 @@ function runFullRefreshCycle() {
   } catch (e) {
     logError("MainCycle", e);
     ui.alert("ERROR: " + e.message);
-  }
-}
   }
 }
