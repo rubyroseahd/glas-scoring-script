@@ -1,53 +1,42 @@
 /**
- * MODULE 5: UI INTERFACE & SYSTEM SAFEGUARDS
+ * MODULE 5: UI INTERFACE
  */
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('VDM Engine Launcher')
-    .addItem('1. Build Master Architecture', 'triggerNuclearArchitectureWipe')
+  ui.createMenu('EEI Pricing Engine Launcher')
+    .addItem('1. Run Flexible Data Refresh', 'executeFlexibleRefreshProcess')
     .addSeparator()
-    .addItem('2. Run VDM Data Refresh', 'runFullRefreshCycle')
+    .addItem('2. Reset Grid Architecture Logs', 'triggerNuclearArchitectureWipe')
     .addToUi();
 }
 
 function triggerNuclearArchitectureWipe() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
-    'CRITICAL WARNING',
-    'This will wipe all data across all tabs and rebuild the system architecture. This cannot be undone. Proceed?',
+    'CRITICAL RESET REQUIRED',
+    'This will wipe all dashboards and historical logs to rebuild the system architecture. Confirm execution?',
     ui.ButtonSet.YES_NO
   );
 
   if (response === ui.Button.YES) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const tabKeys = Object.values(VDM_CONFIG.TABS);
-    
-    tabKeys.forEach(name => {
-      let sheet = ss.getSheetByName(name);
+    Object.values(VDM_CONFIG.TABS).forEach(tabName => {
+      let sheet = ss.getSheetByName(tabName);
       if (sheet) {
-        sheet.clear();
-        sheet.clearConditionalFormatRules();
+        sheet.clear().clearFormats();
       } else {
-        sheet = ss.insertSheet(name);
+        sheet = ss.insertSheet(tabName);
       }
-      
-      if (name.startsWith('_')) {
-        sheet.hideSheet();
-      }
+      if (tabName.startsWith('_')) sheet.hideSheet();
     });
     
-    try {
-      // Initialize Control Panel Headers
-      const cp = ss.getSheetByName(VDM_CONFIG.TABS.CONTROL);
-      const headerRange = cp.getRange("A1:E1");
-      headerRange.setValues([["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "", "Affiliate Stack Rate"]]);
-      applyHeaderStyle(headerRange); // Fix 3: Use applyHeaderStyle
-      cp.getRange("E2").setValue(0.15).setNumberFormat("0%"); // Default stack rate
-      
-      ui.alert("Architecture rebuilt successfully.");
-    } catch (e) {
-      logError("UI-Setup", e);
-    }
+    // Initialize Settings Tab
+    const settings = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS);
+    settings.getRange("A1:E1").setValues([["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "", "Affiliate Coupon Rate"]]);
+    applyHeaderStyle(settings.getRange("A1:E1"));
+    settings.getRange("E2").setValue(0.15).setNumberFormat("0%");
+    
+    ui.alert("System Architecture Wiped and Rebuilt.");
   }
 }

@@ -1,140 +1,145 @@
 /**
  * MODULE 2: INGESTION ENGINE
- * Extraction, Filtering, and Alphanumeric Sanitization Gateway
  */
 
 function runDataIngestion() {
   try {
     const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
     
-    processShopifyFile(folder);
-    processEEIFile(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA);
-    processEEIFile(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB);
-    processGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.SALES, VDM_CONFIG.TABS.RAW_SALES);
-    processGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST);
+    ingestShopify(folder);
+    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA);
+    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB);
+    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.SALES, VDM_CONFIG.TABS.RAW_SALES, "Product variant SKU");
+    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST, "SKU");
     
-    resolveCostHierarchy();
-    
+    executeCostResolutionWaterfall();
   } catch (e) {
     logError("Ingestion", e);
     throw e;
   }
 }
 
-function processShopifyFile(folder) {
+function sanitize(val) {
+  if (val === null || val === undefined) return "";
+  return String(val).trim().toUpperCase().replace(/[\r\n\t]+/g, "");
+}
+
+function ingestShopify(folder) {
   const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SHOPIFY);
-  if (!files.hasNext()) {
-    logError("Ingestion.processShopifyFile", `Shopify file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}`);
-    throw new Error(`Required file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}. Please ensure it exists in the Drive folder.`);
-  }
-  
-  const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  const headers = csvData[0];
-  const sIdx = getHeaderMap(headers);
-  
-  const processedMap = new Map();
-  
-  for (let i = 1; i < csvData.length; i++) {
-    const row = csvData[i];
-    const sku = sanitizeKey(row[sIdx["Variant SKU"]]);
-    const status = (row[sIdx["Status"]] || "").toLowerCase();
-    
-    if (sku && status === "active" && !processedMap.has(sku)) {
-      processedMap.set(sku, [sku, ...row]); // Prepend SKU Anchor
-    }
-  }
-  
-  const output = [["SKU_ANCHOR", ...headers], ...Array.from(processedMap.values())];
-  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY, true);
-  sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange(1, 1, output.length, 1).setNumberFormat("@"); // Format Anchor Column
-}
-
-function processEEIFile(folder, fileName, tabName) {
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) {
-    logError("Ingestion.processEEIFile", `EEI file not found: ${fileName}`);
-    throw new Error(`Required file not found: ${fileName}. Please ensure it exists in the Drive folder.`);
-  }
-  
-  const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  if (csvData.length < 5) { // Need at least 5 rows for headers at row 5
-    logError("Ingestion.processEEIFile", `EEI CSV is too short or empty: ${fileName}`);
-    throw new Error(`EEI CSV is too short or empty: ${fileName}. Expected headers on row 5.`);
-  }
-  
-  const headers = csvData[4];
-  const eeiIdx = getHeaderMap(headers);
-  
-  const rows = csvData.slice(5).map(row => {
-    const sku = sanitizeKey(row[eeiIdx["Item Code"]]);
-    return [sku, ...row]; // Prepend SKU Anchor
-  });
-  
-  const output = [["SKU_ANCHOR", ...headers], ...rows];
-  const sheet = getOrCreateSheet(tabName, true);
-  sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange(1, 1, output.length, 1).setNumberFormat("@");
-}
-
-function processGenericCSV(folder, fileName, tabName) {
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) {
-    logError("Ingestion.processGenericCSV", `Generic CSV file not found: ${fileName}`);
-    throw new Error(`Required file not found: ${fileName}. Please ensure it exists in the Drive folder.`);
-  }
+  if (!files.hasNext()) throw new Error("Shopify file missing");
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const headers = data[0];
-  const skuColIdx = headers.findIndex(h => h.toLowerCase().includes("sku") || h === "Product variant SKU");
-  
-  const rows = data.slice(1).map(row => {
-    const sku = sanitizeKey(row[skuColIdx]);
-    return [sku, ...row];
-  });
-  
-  const output = [["SKU_ANCHOR", ...headers], ...rows];
-  const sheet = getOrCreateSheet(tabName, true);
-  sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange(1, 1, output.length, 1).setNumberFormat("@");
+  const skuIdx = headers.indexOf("Variant SKU");
+  const statusIdx = headers.indexOf("Status");
+  const priceIdx = headers.indexOf("Variant Price");
+  const compareIdx = headers.indexOf("Variant Compare At Price");
+  const vendorIdx = headers.indexOf("Vendor");
+  const fulfillIdx = headers.indexOf("Fulfillment service");
+  const qtyIdx = headers.indexOf("Variant Inventory Qty");
+  const costIdx = headers.indexOf("Cost per item");
+
+  const map = new Map();
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const sku = sanitize(row[skuIdx]);
+    if (sku && row[statusIdx].toLowerCase() === "active" && !map.has(sku)) {
+      // Structure: Anchor, SKU, Status, Price, Compare, Fulfill, Vendor, Qty, ShopifyCost
+      map.set(sku, [sku, sku, row[statusIdx], row[priceIdx], row[compareIdx], row[fulfillIdx], row[vendorIdx], row[qtyIdx], row[costIdx]]);
+    }
+  }
+
+  const outHeaders = ["SKU_ANCHOR", "Variant SKU", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"];
+  writeToHiddenTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [outHeaders, ...Array.from(map.values())]);
 }
 
-function resolveCostHierarchy() {
+function ingestEEI(folder, fileName, tabName) {
+  const files = folder.getFilesByName(fileName);
+  if (!files.hasNext()) throw new Error(`${fileName} missing`);
+  
+  const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+  const headers = data[4]; // Row 5 calibration
+  const skuIdx = headers.indexOf("Item Code");
+  const stockIdx = 11; // Column L
+  const salesIdx = headers.indexOf("Sales Past 30 Days");
+
+  const rows = data.slice(5).map(r => {
+    const sku = sanitize(r[skuIdx]);
+    return [sku, sku, r[stockIdx], r[salesIdx] || 0];
+  });
+
+  writeToHiddenTab(tabName, [["SKU_ANCHOR", "Item Code", "On Hand", "Sales 30D"], ...rows]);
+}
+
+function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
+  const files = folder.getFilesByName(fileName);
+  if (!files.hasNext()) throw new Error(`${fileName} missing`);
+  
+  const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+  const headers = data[0];
+  const skuIdx = headers.indexOf(skuHeader);
+  const netSalesIdx = headers.indexOf("Net items sold");
+
+  const rows = data.slice(1).map(r => {
+    const sku = sanitize(r[skuIdx]);
+    // If sales data, ensure we extract specific columns. Otherwise keep row.
+    return [sku, ...r];
+  });
+
+  writeToHiddenTab(tabName, [["SKU_ANCHOR", ...headers], ...rows]);
+}
+
+function executeCostResolutionWaterfall() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shopifySheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
-  const costSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_COST);
+  const shopifyData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
+  const costData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_COST).getDataRange().getValues();
   
-  const shopifyData = shopifySheet.getDataRange().getValues();
-  const costData = costSheet.getDataRange().getValues();
-  
-  const sIdx = getHeaderMap(shopifyData[0]);
-  const cIdx = getHeaderMap(costData[0]);
-  
-  const costLookup = {};
-  costData.slice(1).forEach(r => {
-    costLookup[sanitizeKey(r[cIdx["SKU"]])] = {
-      eei: parseFloat(r[cIdx["EEI LAST PURCHASE PRICE"]]) || 0,
-      glas: parseFloat(r[cIdx["GLAS Costing"]]) || 0,
-      cotr: parseFloat(r[cIdx["COTR LAST PURCHASE PRICE"]]) || 0
-    };
-  });
-  
-  const resolvedCosts = [["SKU Anchor", "Resolved Cost"]];
-  
-  shopifyData.slice(1).forEach(row => {
-    const sku = sanitizeKey(row[sIdx["Variant SKU"]]);
-    const shopifyCost = parseFloat(row[sIdx["Cost per item"]]) || 0;
-    const external = costLookup[sku] || {eei: 0, glas: 0, cotr: 0};
+  const costHeaders = costData[0];
+  const cIdx = {
+    sku: costHeaders.indexOf("SKU"),
+    eei: costHeaders.indexOf("EEI LAST PURCHASE PRICE"),
+    glas: costHeaders.indexOf("GLAS Costing"),
+    cotr: costHeaders.indexOf("COTR LAST PURCHASE PRICE")
+  };
+
+  const costMap = new Map();
+  costData.slice(1).forEach(r => costMap.set(sanitize(r[cIdx.sku]), r));
+
+  const resolved = [["SKU Anchor", "Resolved Cost"]];
+  shopifyData.slice(1).forEach(r => {
+    const sku = r[0];
+    const shopifyCost = parseFloat(r[8]) || 0;
+    const ext = costMap.get(sku);
     
-    let finalCost = 0;
-    if (external.eei > 0) finalCost = external.eei;
-    else if (external.glas > 0) finalCost = external.glas;
-    else if (external.cotr > 0) finalCost = external.cotr;
-    else finalCost = shopifyCost;
-    
-    resolvedCosts.push([sku, finalCost]);
+    let final = 0;
+    if (ext) {
+      final = parseFloat(ext[cIdx.eei]) || parseFloat(ext[cIdx.glas]) || parseFloat(ext[cIdx.cotr]) || shopifyCost;
+    } else {
+      final = shopifyCost;
+    }
+    resolved.push([sku, final]);
   });
-  
-  const masterCostSheet = getOrCreateSheet(VDM_CONFIG.TABS.MASTER_COST, true);
-  masterCostSheet.clear().getRange(1, 1, resolvedCosts.length, 2).setValues(resolvedCosts);
+
+  writeToHiddenTab(VDM_CONFIG.TABS.MASTER_COST, resolved);
+}
+
+function writeToHiddenTab(name, data) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.hideSheet();
+  }
+  sheet.clear().clearFormats();
+  if (data.length > 0) {
+    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    sheet.getRange(1, 1, data.length, 1).setNumberFormat("@");
+  }
+}
+
+function applyHeaderStyle(range) {
+  range.setBackground(VDM_CONFIG.DESIGN.HEADER_BG)
+       .setFontColor(VDM_CONFIG.DESIGN.HEADER_TEXT)
+       .setFontWeight("bold")
+       .setHorizontalAlignment("center");
 }

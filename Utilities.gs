@@ -20,13 +20,14 @@ function getOrCreateSheet(sheetName, isHidden = false) {
 }
 
 /**
- * Ensures keys (like SKUs) are consistent for lookups.
+ * Ensures keys (like SKUs) are consistent for lookups. 
+ * Adheres to Section 4: Whitespace Trimming, Case Standardization, and Hidden Character Erasure.
  * @param {any} key
  * @return {string}
  */
 function sanitizeKey(key) {
   if (key === null || key === undefined) return "";
-  return String(key).trim().toUpperCase();
+  return String(key).trim().toUpperCase().replace(/[\r\n]+/g, "");
 }
 
 /**
