@@ -9,7 +9,8 @@
  * @param {boolean} isHidden
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function getOrCreateSheet(sheetNameveSpreadsheet();
+function getOrCreateSheet(sheetName, isHidden = false) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
@@ -26,6 +27,7 @@ function getOrCreateSheet(sheetNameveSpreadsheet();
 function sanitizeKey(key) {
   if (key === null || key === undefined) return "";
   return String(key).trim().toUpperCase();
+}
 
 /**
  * Creates a mapping object from a header row to avoid hardcoded indices.
