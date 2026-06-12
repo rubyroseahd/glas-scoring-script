@@ -15,10 +15,10 @@ function generateExecutiveSummary() {
     // Block 1: Global Tier Migration Matrix
     const migrationMatrix = {};
     rows.forEach(r => {
-      // Dynamically find values using headers
-      const from = r[dIdx["Current Tier"]] || "N/A";
-      const to = r[dIdx["Target Tier"]]; 
-      const cost = parseFloat(r[dIdx["Invoiced Asset Cost"]]) || 0; 
+      // Aligned with MatrixEngine.gs headers
+      const from = r[dIdx["Current Equivalent Storefront Tier"]] || "N/A";
+      const to = r[dIdx["Target Strategic Tier"]]; 
+      const cost = parseFloat(r[dIdx["Resolved Cost Base"]]) || 0; 
       
       const key = `${from} -> ${to}`;
       if (!migrationMatrix[key]) migrationMatrix[key] = { count: 0, costImpact: 0 };
@@ -48,19 +48,19 @@ function generateExecutiveSummary() {
 
     const glasSummary = {};
     rows.forEach(r => {
-      const sku = r[dIdx["SKU"]];
+      const sku = r[dIdx["SKU Anchor Key"]];
       const vendor = (vendorMap[sku] || "").toLowerCase();
       const isHouseBrand = VDM_CONFIG.HOUSE_BRANDS.some(hb => vendor.includes(hb.toLowerCase()));
 
       if (isHouseBrand) {
-        const tier = r[dIdx["Target Tier"]];
+        const tier = r[dIdx["Target Strategic Tier"]];
         if (!glasSummary[tier]) glasSummary[tier] = { count: 0, shared: 0, webOnly: 0, vdmSum: 0, netSum: 0 };
         
         glasSummary[tier].count++;
-        if (r[dIdx["Status"]] === "SHARED") glasSummary[tier].shared++;
-        if (r[dIdx["Status"]] === "WEBONLY") glasSummary[tier].webOnly++;
-        glasSummary[tier].vdmSum += parseFloat(r[dIdx["Discount Depth"]]) || 0;
-        glasSummary[tier].netSum += (1 - (parseFloat(r[dIdx["Price"]]) / parseFloat(r[dIdx["MSRP"]]))) || 0;
+        if (r[dIdx["Fulfillment Tag"]] === "SHARED") glasSummary[tier].shared++;
+        if (r[dIdx["Fulfillment Tag"]] === "WEBONLY") glasSummary[tier].webOnly++;
+        glasSummary[tier].vdmSum += parseFloat(r[dIdx["VDM Markdown Depth %"]]) || 0;
+        glasSummary[tier].netSum += (1 - (parseFloat(r[dIdx["Live Storefront Price"]]) / parseFloat(r[dIdx["Live Compare MSRP"]]))) || 0;
       }
     });
 
@@ -103,10 +103,10 @@ function logPricingElasticitySnapshot(rows, dIdx) {
   
   const logData = rows.map(r => [
     dateStamp, 
-    r[dIdx["SKU"]], 
-    r[dIdx["Discount Depth"]], 
-    r[dIdx["Price"]], 
-    r[dIdx["Velocity Score"]]
+    r[dIdx["SKU Anchor Key"]], 
+    r[dIdx["VDM Markdown Depth %"]], 
+    r[dIdx["Live Storefront Price"]], 
+    r[dIdx["Velocity Score Component"]]
   ]);
   if (logData.length > 0) {
     const lastRow = ledger.getLastRow();
@@ -148,22 +148,22 @@ function buildStorefrontSyncAudit(dashRows, dIdx) {
   shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[skuIdx])] = r[handleIdx]);
 
   const syncAuditData = dashRows.map(r => {
-    const sku = r[dIdx["SKU"]];
-    const discountDepth = r[dIdx["Discount Depth"]];
-    const status = r[dIdx["Update Status"]] || "";
+    const sku = r[dIdx["SKU Anchor Key"]];
+    const discountDepth = r[dIdx["VDM Markdown Depth %"]];
+    const status = r[dIdx["Pricing Migration Status"]] || "";
     
     return [
       sku,                                // Col 1: SKU
       handleMap[sku] || "",               // Col 2: Handle
       status.includes("✓") ? "NO CHANGE" : "UPDATED", // Col 3: Action
-      r[dIdx["Target Tier"]],             // Col 4: Final Tier
+      r[dIdx["Target Strategic Tier"]],   // Col 4: Final Tier
       discountDepth,                      // Col 5: Final Discount
-      r[dIdx["Old Price"]],               // Col 6: Old Variant Price
-      r[dIdx["Old MSRP"]],                // Col 7: Old Compare At Price
-      r[dIdx["Old MSRP"]],                // Col 8: Base Price Used
-      r[dIdx["Price"]],                   // Col 9: New Variant Price
-      discountDepth > 0 ? r[dIdx["Old MSRP"]] : "", // Col 10: New Compare At Price
-      r[dIdx["Guardrail Note"]]           // Col 11: Note / Guardrail
+      r[dIdx["Live Storefront Price"]],   // Col 6: Old Variant Price
+      r[dIdx["Live Compare MSRP"]],       // Col 7: Old Compare At Price
+      r[dIdx["Live Compare MSRP"]],       // Col 8: Base Price Used
+      r[dIdx["New Proposed Storefront Price"]], // Col 9: New Variant Price
+      discountDepth > 0 ? r[dIdx["Live Compare MSRP"]] : "", // Col 10: New Compare At Price
+      r[dIdx["Profit Guardrail Status Alert"]] // Col 11: Note / Guardrail
     ];
   });
 

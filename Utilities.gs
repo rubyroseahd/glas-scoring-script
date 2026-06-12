@@ -6,13 +6,14 @@
 /**
  * Fetches a sheet by name or creates it with default styling if it doesn't exist.
  * @param {string} sheetName 
+ * @param {boolean} isHidden
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function getOrCreateSheet(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getOrCreateSheet(sheetNameveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
+    if (isHidden) sheet.hideSheet();
   }
   return sheet;
 }
@@ -24,8 +25,7 @@ function getOrCreateSheet(sheetName) {
  */
 function sanitizeKey(key) {
   if (key === null || key === undefined) return "";
-  return String(key).trim().toLowerCase();
-}
+  return String(key).trim().toUpperCase();
 
 /**
  * Creates a mapping object from a header row to avoid hardcoded indices.
