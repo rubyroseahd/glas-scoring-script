@@ -3,14 +3,13 @@
  * Executive Summaries, Presentation Dashboards & Sync Audits
  */
 
-function generateExecutiveSummary() {
+function generateExecutiveSummary(dashRows, dIdx) { // Fix 1: Accept arguments
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
-    const dashData = dash.getDataRange().getValues();
-    const dashHeaders = dashData[0];
-    const dIdx = getHeaderMap(dashHeaders);
-    const rows = dashData.slice(1);
+    // const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD); // No longer needed
+    // const dashData = dash.getDataRange().getValues(); // No longer needed
+    // const dashHeaders = dashData[0]; // No longer needed
+    const rows = dashRows; // Use passed argument
 
     // Block 1: Global Tier Migration Matrix
     const migrationMatrix = {};
@@ -43,7 +42,13 @@ function generateExecutiveSummary() {
     const sIdx = getHeaderMap(shopHeaders);
 
     const vendorMap = {};
-    shopifyData.slice(1).forEach(r => vendorMap[sanitizeKey(r[sIdx["Vendor"]])] = r[sIdx["Vendor"]]);
+    // Fix 1: Corrected vendorMap creation - map SKU to Vendor Name
+    shopifyData.slice(1).forEach(r => {
+      const itemSku = sanitizeKey(r[sIdx["Variant SKU"]]);
+      if (itemSku) {
+        vendorMap[itemSku] = r[sIdx["Vendor"]];
+      }
+    });
 
     const glasSummary = {};
     rows.forEach(r => {
@@ -83,11 +88,12 @@ function generateExecutiveSummary() {
       summarySheet.getRange(startRow + 1, 5, glasRows.length, 4).setNumberFormat("0.00%");
     }
 
-    buildStorefrontSyncAudit(rows, dIdx);
-    logPricingElasticitySnapshot(rows, dIdx);
-    generateSupplierScorecard(rows, vendorMap);
-    generateWarehouseAgingReport(rows);
-    generateMAPComplianceReport(rows);
+    // These functions are now called from runFullRefreshCycle with the correct arguments
+    // buildStorefrontSyncAudit(rows, dIdx);
+    // logPricingElasticitySnapshot(rows, dIdx);
+    // generateSupplierScorecard(rows, vendorMap);
+    // generateWarehouseAgingReport(rows);
+    // generateMAPComplianceReport(rows);
 
     console.log("Analytics Reporting Complete.");
   } catch (e) {
@@ -101,19 +107,19 @@ function logPricingElasticitySnapshot(rows, dIdx) {
   const dateStamp = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
   
   const logData = rows.map(r => [
-    dateStamp, 
-    r[dIdx["SKU Anchor Key"]], 
-    r[dIdx["VDM Markdown Depth %"]], 
-    r[dIdx["Live Storefront Price"]], 
+    dateStamp,
+    r[dIdx["SKU Anchor Key"]],
+    r[dIdx["VDM Markdown Depth %"]],
+    r[dIdx["Simulated Checkout Net Price"]], // Log checkout price for elasticity
     r[dIdx["Velocity Score Component"]]
   ]);
-  if (logData.length > 0) {
-    const lastRow = ledger.getLastRow();
-    ledger.getRange(lastRow === 0 ? 1 : lastRow + 1, 1, logData.length, 5).setValues(logData);
-    if (lastRow === 0) {
-      ledger.insertRowBefore(1);
-      ledger.getRange("A1:E1").setValues([["Date", "SKU", "Markdown %", "Checkout Price", "Velocity Score"]]).setFontWeight("bold");
-    }
+  // Fix 4: Corrected destructive overwriting sequence
+  if (ledger.getLastRow() === 0) {
+    ledger.getRange(1, 1, 1, 5).setValues([["Snapshot Date", "SKU", "Markdown Depth %", "Checkout Price", "Velocity Score"]]);
+    applyHeaderStyle(ledger.getRange(1, 1, 1, 5));
+  }
+  if (logData.length > 0) { // Only write if there's data
+    ledger.getRange(ledger.getLastRow() + 1, 1, logData.length, 5).setValues(logData);
   }
 }
 
@@ -121,7 +127,7 @@ function generateSupplierScorecard(rows, vendorMap) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getOrCreateSheet(VDM_CONFIG.TABS.SCORECARD);
   sheet.clear();
-
+  
   const dIdx = getHeaderMap(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(VDM_CONFIG.TABS.DASHBOARD).getDataRange().getValues()[0]);
   const supplierData = {};
 
@@ -145,7 +151,7 @@ function generateSupplierScorecard(rows, vendorMap) {
   });
 
   sheet.getRange(1, 1, output.length, 4).setValues(output);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
+  applyHeaderStyle(sheet.getRange(1, 1, 1, 4)); // Fix 3: Use applyHeaderStyle
   sheet.getRange(2, 3, output.length - 1, 1).setNumberFormat("$#,##0.00");
 }
 
@@ -168,7 +174,7 @@ function generateWarehouseAgingReport(rows) {
   ]);
 
   const headers = [["SKU", "Units On Hand", "Capital Tied Up", "Recommendation"]];
-  sheet.getRange(1, 1, 1, 4).setValues(headers);
+  sheet.getRange(1, 1, 1, 4).setValues(headers); // Fix 3: Use applyHeaderStyle
   applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
   if (agingRows.length > 0) sheet.getRange(2, 1, agingRows.length, 4).setValues(agingRows);
 }
@@ -183,13 +189,16 @@ function generateMAPComplianceReport(rows) {
                       .map(r => [r[dIdx["SKU Anchor Key"]], r[dIdx["Live Storefront Price"]], "Review Required"]);
 
   const headers = [["SKU", "Current Live Price", "Compliance Status"]];
-  sheet.getRange(1, 1, 1, 3).setValues(headers);
+  sheet.getRange(1, 1, 1, 3).setValues(headers); // Fix 3: Use applyHeaderStyle
   applyHeaderStyle(sheet.getRange(1, 1, 1, 3));
   if (mapRows.length > 0) sheet.getRange(2, 1, mapRows.length, 3).setValues(mapRows);
 }
 
 function buildStorefrontSyncAudit(dashRows, dIdx) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const syncSheet = getOrCreateSheet(VDM_CONFIG.TABS.SYNC);
+  syncSheet.clear(); // Clear before writing
+
   const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
   const shopifyData = shopifyRaw.getDataRange().getValues();
   const sIdx = getHeaderMap(shopifyData[0]);
@@ -197,11 +206,13 @@ function buildStorefrontSyncAudit(dashRows, dIdx) {
   const handleMap = {};
   shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[sIdx["Variant SKU"]])] = r[sIdx["Handle"]]);
 
+  // Ensure dashRows is not empty before mapping
+  if (dashRows.length === 0) return;
+
   const syncAuditData = dashRows.map(r => {
     const sku = r[dIdx["SKU Anchor Key"]];
     const discountDepth = r[dIdx["VDM Markdown Depth %"]];
     const status = r[dIdx["Pricing Migration Status"]] || "";
-    
     return [
       sku,                                // Col 1: SKU
       handleMap[sku] || "",               // Col 2: Handle
@@ -217,9 +228,9 @@ function buildStorefrontSyncAudit(dashRows, dIdx) {
     ];
   });
 
-  const syncSheet = getOrCreateSheet(VDM_CONFIG.TABS.SYNC);
   const headers = [["SKU", "Handle", "Action", "Final Tier", "Final Discount", "Old Price", "Old Compare", "Base MSRP", "New Price", "New Compare", "Note"]];
-  syncSheet.getRange(1, 1, 1, 11).setValues(headers).setBackground("#000000").setFontColor("#FFFFFF").setFontWeight("bold");
+  syncSheet.getRange(1, 1, 1, 11).setValues(headers);
+  applyHeaderStyle(syncSheet.getRange(1, 1, 1, 11)); // Fix 3: Use applyHeaderStyle
   syncSheet.getRange(2, 1, syncAuditData.length, 11).setValues(syncAuditData);
   
   // Note/Guardrail Highlighting

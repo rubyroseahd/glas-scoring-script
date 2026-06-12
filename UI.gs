@@ -40,8 +40,9 @@ function triggerNuclearArchitectureWipe() {
     try {
       // Initialize Control Panel Headers
       const cp = ss.getSheetByName(VDM_CONFIG.TABS.CONTROL);
-      cp.getRange("A1:E1").setValues([["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "", "Affiliate Stack Rate"]])
-        .setBackground("#000000").setFontColor("#FFFFFF").setFontWeight("bold");
+      const headerRange = cp.getRange("A1:E1");
+      headerRange.setValues([["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "", "Affiliate Stack Rate"]]);
+      applyHeaderStyle(headerRange); // Fix 3: Use applyHeaderStyle
       cp.getRange("E2").setValue(0.15).setNumberFormat("0%"); // Default stack rate
       
       ui.alert("Architecture rebuilt successfully.");

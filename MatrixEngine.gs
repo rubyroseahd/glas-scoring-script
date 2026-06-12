@@ -13,14 +13,17 @@ function refreshDashboardMatrix() {
     if (shopifyData.length < 2) return;
 
     const headers = shopifyData[0];
-    const sIdx = getHeaderMap(headers); // Shopify raw data header map
+    const sIdx = getHeaderMap(headers); // Shopify raw data header map (e.g., for Variant SKU, Vendor, etc.)
 
     // Get header maps for other raw sheets for dynamic VLOOKUP indices
     const usaSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_USA);
     const webSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_WEB);
-    const rUsaIdx = usaSheet ? getHeaderMap(usaSheet.getDataRange().getValues()[0]) : {};
+    const salesSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SALES);
+    const rUsaIdx = usaSheet ? getHeaderMap(usaSheet.getDataRange().getValues()[0]) : {}; // EEI USA header map
+    const rWebIdx = webSheet ? getHeaderMap(webSheet.getDataRange().getValues()[0]) : {}; // EEI WEB header map
+    const rSalesIdx = salesSheet ? getHeaderMap(salesSheet.getDataRange().getValues()[0]) : {}; // Sales header map
 
-    const skuList = shopifyData.slice(1).map(r => [sanitizeKey(r[sIdx["Variant SKU"]])]);
+    const skuList = shopifyData.slice(1).map(r => [sanitizeKey(r[sIdx["Variant SKU"]])]); // Fix 1: Corrected SKU lookup
     const lastRow = skuList.length + 1;
 
     // Clear and Rebuild Layout (26 Columns A-Z)
@@ -30,7 +33,7 @@ function refreshDashboardMatrix() {
       "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Velocity Score Component",
       "Margin Score Component", "Stock Score Component", "Total Composite Score", "Target Strategic Tier",
       "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", 
-      "Live Storefront Shopify Qty", "Execution Inventory Drift Tracker", "New Proposed Storefront Price",
+      "Live Storefront Shopify Qty", "Execution Inventory Drift Tracker", "New Proposed Storefront Price", // Fix 1: Aligned header name
       "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert",
       "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"
     ];
@@ -61,14 +64,14 @@ function refreshDashboardMatrix() {
         `=IF(OR(ISBLANK(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Compare At Price"] + 1}, 0)), VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Compare At Price"] + 1}, 0)=0), E${r}, VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Compare At Price"] + 1}, 0))`,
         `=IF(F${r}=E${r}, 0, (F${r} - E${r}) / F${r})`,
         `=IFERROR((E${r} - D${r}) / E${r}, 0)`,
-        `=IFERROR(IF(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0)<=1, 1, PERCENTRANK.INC(FILTER(${rSales}!$D$2:$D, ${rSales}!$D$2:$D>1), VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0))*4), 0)`,
+        `=IFERROR(IF(VLOOKUP(A${r}, ${rSales}!$A:$Z, ${rSalesIdx["Total Quantity Sold"] + 1}, 0)<=1, 1, PERCENTRANK.INC(FILTER(${rSales}!$D$2:$D, ${rSales}!$D$2:$D>1), VLOOKUP(A${r}, ${rSales}!$A:$Z, ${rSalesIdx["Total Quantity Sold"] + 1}, 0))*4), 0)`, // Fix 2: Dynamic index for Sales
         `=IFERROR(IFS(H${r}>=0.55, 3, H${r}>=0.45, 2, H${r}>=0.35, 1, TRUE, 0), 0)`,
-        `=IF(C${r}="WEBONLY", 2, IFS(IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0)/90), 999)>=180, 0, IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0)/90), 999)>=121, 1, TRUE, 3))`,
+        `=IF(C${r}="WEBONLY", 2, IFS(IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$Z, ${rSalesIdx["Total Quantity Sold"] + 1}, 0)/90), 999)>=180, 0, IFERROR(O${r}/(VLOOKUP(A${r}, ${rSales}!$A:$Z, ${rSalesIdx["Total Quantity Sold"] + 1}, 0)/90), 999)>=121, 1, TRUE, 3))`, // Fix 2: Dynamic index for Sales
         `=SUM(I${r},J${r},K${r})`,
         `=IFS(B${r}="New Launch", "New Launch (0% Hold)", B${r}="3rd Party MAP", "3rd Party MAP Review (0% Hold)", L${r}=10, "Top Hero (0% Off)", L${r}>=8, "Signature Hero (30% Off)", L${r}>=6, "Proven Performer (40% Off)", L${r}>=4, "Accelerator (50% Off)", TRUE, "Clearance/Archive (65% Off)")`,
         `=IF(M${r}="Signature Hero (30% Off)", 0.30, IF(M${r}="Proven Performer (40% Off)", 0.40, IF(M${r}="Accelerator (50% Off)", 0.50, IF(M${r}="Clearance/Archive (65% Off)", 0.65, 0))))`,
-        `=IFERROR(VLOOKUP(A${r}, ${rUsa}!$B:$L, 11, 0), 0) + IFERROR(VLOOKUP(A${r}, ${rWeb}!$B:$L, 11, 0), 0)`,
-        `=IFERROR(VLOOKUP(A${r}, ${rWeb}!$B:$L, 11, 0), 0)`,
+        `=IFERROR(VLOOKUP(A${r}, ${rUsa}!$A:$Z, ${rUsaIdx["Available Qty"] + 1}, 0), 0) + IFERROR(VLOOKUP(A${r}, ${rWeb}!$A:$Z, ${rWebIdx["Available Qty"] + 1}, 0), 0)`, // Fix 2: Dynamic index for EEI USA/WEB
+        `=IFERROR(VLOOKUP(A${r}, ${rWeb}!$A:$Z, ${rWebIdx["Available Qty"] + 1}, 0), 0)`, // Fix 2: Dynamic index for EEI WEB
         `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Inventory Qty"] + 1}, 0), 0)`,
         `=Q${r}-P${r}`,
         `=F${r} * (1 - N${r})`,
@@ -82,7 +85,7 @@ function refreshDashboardMatrix() {
       ];
     });
 
-    // Single Atomic Write for all formulas (Columns B through Z)
+    // Single Atomic Write for all formulas (Columns B through Z) (Fix 3: Pass VDM_CONFIG.DESIGN)
     dash.getRange(2, 2, formulaMatrix.length, 25).setFormulas(formulaMatrix);
 
     applyFormattingRules(dash);

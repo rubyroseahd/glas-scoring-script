@@ -25,7 +25,7 @@ function processShopifyFile(folder) {
   const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SHOPIFY);
   if (!files.hasNext()) {
     logError("Ingestion.processShopifyFile", `Shopify file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}`);
-    throw new Error(`Required file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}`);
+    throw new Error(`Required file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}. Please ensure it exists in the Drive folder.`);
   }
   
   const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
@@ -45,7 +45,7 @@ function processShopifyFile(folder) {
   }
   
   const output = [headers, ...Array.from(processedMap.values())];
-  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY, true); // Ensure it's hidden
+  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY, true);
   sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
   sheet.getRange(1, sIdx["Variant SKU"] + 1, output.length, 1).setNumberFormat("@"); // Apply to specific SKU column
 }
@@ -54,13 +54,13 @@ function processEEIFile(folder, fileName, tabName) {
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) {
     logError("Ingestion.processEEIFile", `EEI file not found: ${fileName}`);
-    throw new Error(`Required file not found: ${fileName}`);
+    throw new Error(`Required file not found: ${fileName}. Please ensure it exists in the Drive folder.`);
   }
   
   const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   if (csvData.length < 5) { // Need at least 5 rows for headers at row 5
     logError("Ingestion.processEEIFile", `EEI CSV is too short or empty: ${fileName}`);
-    throw new Error(`EEI CSV is too short or empty: ${fileName}`);
+    throw new Error(`EEI CSV is too short or empty: ${fileName}. Expected headers on row 5.`);
   }
   
   const headers = csvData[4];
@@ -81,7 +81,7 @@ function processGenericCSV(folder, fileName, tabName) {
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) {
     logError("Ingestion.processGenericCSV", `Generic CSV file not found: ${fileName}`);
-    throw new Error(`Required file not found: ${fileName}`);
+    throw new Error(`Required file not found: ${fileName}. Please ensure it exists in the Drive folder.`);
   }
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
