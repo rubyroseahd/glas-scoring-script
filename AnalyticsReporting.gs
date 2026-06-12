@@ -120,31 +120,82 @@ function logPricingElasticitySnapshot(rows, dIdx) {
 function generateSupplierScorecard(rows, vendorMap) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getOrCreateSheet(VDM_CONFIG.TABS.SCORECARD);
-  sheet.getRange("A1").setValue("Supplier Scorecard Summary (WIP)").setFontWeight("bold");
+  sheet.clear();
+
+  const dIdx = getHeaderMap(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(VDM_CONFIG.TABS.DASHBOARD).getDataRange().getValues()[0]);
+  const supplierData = {};
+
+  rows.forEach(r => {
+    const sku = r[dIdx["SKU Anchor Key"]];
+    const vendor = vendorMap[sku] || "Unknown";
+    const costOfStock = (parseFloat(r[dIdx["Resolved Cost Base"]]) || 0) * (parseFloat(r[dIdx["Total On-Hand Warehouse Stock"]]) || 0);
+
+    if (!supplierData[vendor]) {
+      supplierData[vendor] = { skus: 0, totalValue: 0, velocitySum: 0 };
+    }
+    supplierData[vendor].skus++;
+    supplierData[vendor].totalValue += costOfStock;
+    supplierData[vendor].velocitySum += parseFloat(r[dIdx["Velocity Score Component"]]) || 0;
+  });
+
+  const output = [["Vendor / Brand", "Active SKU Count", "Total Invoiced Stock Value", "Avg Velocity Score"]];
+  Object.keys(supplierData).forEach(v => {
+    const s = supplierData[v];
+    output.push([v, s.skus, s.totalValue, s.skus > 0 ? s.velocitySum / s.skus : 0]);
+  });
+
+  sheet.getRange(1, 1, output.length, 4).setValues(output);
+  applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
+  sheet.getRange(2, 3, output.length - 1, 1).setNumberFormat("$#,##0.00");
 }
 
 function generateWarehouseAgingReport(rows) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getOrCreateSheet(VDM_CONFIG.TABS.AGING);
-  sheet.getRange("A1").setValue("Liquidation Candidates (WIP)").setFontWeight("bold");
+  sheet.clear();
+  
+  const dIdx = getHeaderMap(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(VDM_CONFIG.TABS.DASHBOARD).getDataRange().getValues()[0]);
+  
+  // Filter for Clearance/Archive items with 0 Velocity
+  const agingRows = rows.filter(r => 
+    r[dIdx["Target Strategic Tier"]].includes("Clearance/Archive") && 
+    parseFloat(r[dIdx["Velocity Score Component"]]) === 0
+  ).map(r => [
+    r[dIdx["SKU Anchor Key"]],
+    r[dIdx["Total On-Hand Warehouse Stock"]],
+    (parseFloat(r[dIdx["Resolved Cost Base"]]) || 0) * (parseFloat(r[dIdx["Total On-Hand Warehouse Stock"]]) || 0),
+    "Alternative Disposal Recommended"
+  ]);
+
+  const headers = [["SKU", "Units On Hand", "Capital Tied Up", "Recommendation"]];
+  sheet.getRange(1, 1, 1, 4).setValues(headers);
+  applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
+  if (agingRows.length > 0) sheet.getRange(2, 1, agingRows.length, 4).setValues(agingRows);
 }
 
 function generateMAPComplianceReport(rows) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getOrCreateSheet(VDM_CONFIG.TABS.COMPLIANCE);
-  sheet.getRange("A1").setValue("MAP Compliance Tracking (WIP)").setFontWeight("bold");
+  sheet.clear();
+
+  const dIdx = getHeaderMap(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(VDM_CONFIG.TABS.DASHBOARD).getDataRange().getValues()[0]);
+  const mapRows = rows.filter(r => r[dIdx["Gatekeeper Status"]] === "3rd Party MAP")
+                      .map(r => [r[dIdx["SKU Anchor Key"]], r[dIdx["Live Storefront Price"]], "Review Required"]);
+
+  const headers = [["SKU", "Current Live Price", "Compliance Status"]];
+  sheet.getRange(1, 1, 1, 3).setValues(headers);
+  applyHeaderStyle(sheet.getRange(1, 1, 1, 3));
+  if (mapRows.length > 0) sheet.getRange(2, 1, mapRows.length, 3).setValues(mapRows);
 }
 
 function buildStorefrontSyncAudit(dashRows, dIdx) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
   const shopifyData = shopifyRaw.getDataRange().getValues();
-  const shopHeaders = shopifyData[0];
-  const handleIdx = shopHeaders.findIndex(h => h === "Handle");
-  const skuIdx = shopHeaders.findIndex(h => h.includes("Variant SKU"));
+  const sIdx = getHeaderMap(shopifyData[0]);
 
   const handleMap = {};
-  shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[skuIdx])] = r[handleIdx]);
+  shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[sIdx["Variant SKU"]])] = r[sIdx["Handle"]]);
 
   const syncAuditData = dashRows.map(r => {
     const sku = r[dIdx["SKU Anchor Key"]];

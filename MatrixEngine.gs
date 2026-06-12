@@ -13,13 +13,14 @@ function refreshDashboardMatrix() {
     if (shopifyData.length < 2) return;
 
     const headers = shopifyData[0];
-    const skuIdx = headers.findIndex(h => h.includes("Variant SKU"));
-    const priceIdx = headers.findIndex(h => h.includes("Variant Price"));
-    const msrpIdx = headers.findIndex(h => h.includes("Variant Compare At Price"));
-    const qtyIdx = headers.findIndex(h => h.includes("Variant Inventory Qty"));
-    const vendorIdx = headers.findIndex(h => h.includes("Vendor"));
+    const sIdx = getHeaderMap(headers); // Shopify raw data header map
 
-    const skuList = shopifyData.slice(1).map(r => [sanitizeKey(r[skuIdx])]);
+    // Get header maps for other raw sheets for dynamic VLOOKUP indices
+    const usaSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_USA);
+    const webSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_EEI_WEB);
+    const rUsaIdx = usaSheet ? getHeaderMap(usaSheet.getDataRange().getValues()[0]) : {};
+
+    const skuList = shopifyData.slice(1).map(r => [sanitizeKey(r[sIdx["Variant SKU"]])]);
     const lastRow = skuList.length + 1;
 
     // Clear and Rebuild Layout (26 Columns A-Z)
@@ -29,7 +30,7 @@ function refreshDashboardMatrix() {
       "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Velocity Score Component",
       "Margin Score Component", "Stock Score Component", "Total Composite Score", "Target Strategic Tier",
       "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", 
-      "Live Storefront Shopify Qty", "Monday Inventory Drift Tracker", "New Proposed Storefront Price",
+      "Live Storefront Shopify Qty", "Execution Inventory Drift Tracker", "New Proposed Storefront Price",
       "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert",
       "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"
     ];
@@ -53,11 +54,11 @@ function refreshDashboardMatrix() {
     const formulaMatrix = skuList.map((row, i) => {
       const r = i + 2; // Row index for formulas
       return [
-        `=IFS(ISNUMBER(MATCH(A${r}, '${ctrl}'!$A:$A, 0)), "⚠️ Active GWP Promo", ISNUMBER(MATCH(A${r}, '${ctrl}'!$B:$B, 0)), "New Launch", SUMPRODUCT(--ISNUMBER(SEARCH('${ctrl}'!$C$2:$C$50, VLOOKUP(A${r}, ${rShop}!$A:$Z, ${vendorIdx + 1}, 0)))), "3rd Party MAP", TRUE, "None")`,
-        `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$Z, 6, 0), "SHARED")`,
+        `=IFS(ISNUMBER(MATCH(A${r}, '${ctrl}'!$A:$A, 0)), "⚠️ Active GWP Promo", ISNUMBER(MATCH(A${r}, '${ctrl}'!$B:$B, 0)), "New Launch", SUMPRODUCT(--ISNUMBER(SEARCH('${ctrl}'!$C$2:$C$50, VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Vendor"] + 1}, 0)))), "3rd Party MAP", TRUE, "None")`,
+        `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Fulfillment service"] + 1}, 0), "SHARED")`,
         `=IFERROR(VLOOKUP(A${r}, ${rCost}!$A:$B, 2, 0), 0)`,
-        `=VLOOKUP(A${r}, ${rShop}!$A:$Z, ${priceIdx + 1}, 0)`,
-        `=IF(OR(ISBLANK(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${msrpIdx + 1}, 0)), VLOOKUP(A${r}, ${rShop}!$A:$Z, ${msrpIdx + 1}, 0)=0), E${r}, VLOOKUP(A${r}, ${rShop}!$A:$Z, ${msrpIdx + 1}, 0))`,
+        `=VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Price"] + 1}, 0)`,
+        `=IF(OR(ISBLANK(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Compare At Price"] + 1}, 0)), VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Compare At Price"] + 1}, 0)=0), E${r}, VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Compare At Price"] + 1}, 0))`,
         `=IF(F${r}=E${r}, 0, (F${r} - E${r}) / F${r})`,
         `=IFERROR((E${r} - D${r}) / E${r}, 0)`,
         `=IFERROR(IF(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0)<=1, 1, PERCENTRANK.INC(FILTER(${rSales}!$D$2:$D, ${rSales}!$D$2:$D>1), VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0))*4), 0)`,
@@ -68,7 +69,7 @@ function refreshDashboardMatrix() {
         `=IF(M${r}="Signature Hero (30% Off)", 0.30, IF(M${r}="Proven Performer (40% Off)", 0.40, IF(M${r}="Accelerator (50% Off)", 0.50, IF(M${r}="Clearance/Archive (65% Off)", 0.65, 0))))`,
         `=IFERROR(VLOOKUP(A${r}, ${rUsa}!$B:$L, 11, 0), 0) + IFERROR(VLOOKUP(A${r}, ${rWeb}!$B:$L, 11, 0), 0)`,
         `=IFERROR(VLOOKUP(A${r}, ${rWeb}!$B:$L, 11, 0), 0)`,
-        `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${qtyIdx + 1}, 0), 0)`,
+        `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$Z, ${sIdx["Variant Inventory Qty"] + 1}, 0), 0)`,
         `=Q${r}-P${r}`,
         `=F${r} * (1 - N${r})`,
         `=S${r} * (1 - '${ctrl}'!$E$2)`,

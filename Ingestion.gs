@@ -23,7 +23,10 @@ function runDataIngestion() {
 
 function processShopifyFile(folder) {
   const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SHOPIFY);
-  if (!files.hasNext()) return;
+  if (!files.hasNext()) {
+    logError("Ingestion.processShopifyFile", `Shopify file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}`);
+    throw new Error(`Required file not found: ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}`);
+  }
   
   const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const headers = csvData[0];
@@ -42,40 +45,55 @@ function processShopifyFile(folder) {
   }
   
   const output = [headers, ...Array.from(processedMap.values())];
-  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY);
-  if (sheet.getIndex() > 0) sheet.hideSheet(); // Maintain hidden status if desired
+  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY, true); // Ensure it's hidden
   sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange("A:Z").setNumberFormat("@");
+  sheet.getRange(1, sIdx["Variant SKU"] + 1, output.length, 1).setNumberFormat("@"); // Apply to specific SKU column
 }
 
 function processEEIFile(folder, fileName, tabName) {
   const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) return;
+  if (!files.hasNext()) {
+    logError("Ingestion.processEEIFile", `EEI file not found: ${fileName}`);
+    throw new Error(`Required file not found: ${fileName}`);
+  }
   
   const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  if (csvData.length < 5) return;
+  if (csvData.length < 5) { // Need at least 5 rows for headers at row 5
+    logError("Ingestion.processEEIFile", `EEI CSV is too short or empty: ${fileName}`);
+    throw new Error(`EEI CSV is too short or empty: ${fileName}`);
+  }
   
   const headers = csvData[4];
-  const itemCodeIdx = headers.findIndex(h => h === "Item Code");
+  const eeiIdx = getHeaderMap(headers);
   
   const rows = csvData.slice(5).map(row => {
-    row[itemCodeIdx] = sanitizeKey(row[itemCodeIdx]);
+    row[eeiIdx["Item Code"]] = sanitizeKey(row[eeiIdx["Item Code"]]);
     return row;
   });
   
   const output = [headers, ...rows];
   const sheet = getOrCreateSheet(tabName, true);
   sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange(1, itemCodeIdx + 1, output.length, 1).setNumberFormat("@");
+  sheet.getRange(1, eeiIdx["Item Code"] + 1, output.length, 1).setNumberFormat("@");
 }
 
 function processGenericCSV(folder, fileName, tabName) {
   const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) return;
+  if (!files.hasNext()) {
+    logError("Ingestion.processGenericCSV", `Generic CSV file not found: ${fileName}`);
+    throw new Error(`Required file not found: ${fileName}`);
+  }
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const sheet = getOrCreateSheet(tabName, true);
   sheet.clear().getRange(1, 1, data.length, data[0].length).setValues(data);
+
+  // Assuming the first column is the SKU for generic CSVs if not specified
+  const headers = data[0];
+  const skuColIdx = headers.findIndex(h => h.toLowerCase().includes("sku")); // Best guess
+  if (skuColIdx !== -1) {
+    sheet.getRange(1, skuColIdx + 1, data.length, 1).setNumberFormat("@");
+  }
 }
 
 function resolveCostHierarchy() {
