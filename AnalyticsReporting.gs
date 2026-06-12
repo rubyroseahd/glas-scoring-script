@@ -40,11 +40,10 @@ function generateExecutiveSummary() {
     const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
     const shopifyData = shopifyRaw.getDataRange().getValues();
     const shopHeaders = shopifyData[0];
-    const vendorIdx = shopHeaders.findIndex(h => h.includes("Vendor"));
-    const skuIdx = shopHeaders.findIndex(h => h.includes("Variant SKU"));
+    const sIdx = getHeaderMap(shopHeaders);
 
     const vendorMap = {};
-    shopifyData.slice(1).forEach(r => vendorMap[sanitizeKey(r[skuIdx])] = r[vendorIdx]);
+    shopifyData.slice(1).forEach(r => vendorMap[sanitizeKey(r[sIdx["Vendor"]])] = r[sIdx["Vendor"]]);
 
     const glasSummary = {};
     rows.forEach(r => {

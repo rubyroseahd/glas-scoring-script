@@ -27,15 +27,14 @@ function processShopifyFile(folder) {
   
   const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const headers = csvData[0];
-  const skuIdx = headers.findIndex(h => h.includes("Variant SKU"));
-  const statusIdx = headers.findIndex(h => h === "Status");
+  const sIdx = getHeaderMap(headers);
   
   const processedMap = new Map();
   
   for (let i = 1; i < csvData.length; i++) {
     const row = csvData[i];
-    const sku = sanitizeKey(row[skuIdx]);
-    const status = (row[statusIdx] || "").toLowerCase();
+    const sku = sanitizeKey(row[sIdx["Variant SKU"]]);
+    const status = (row[sIdx["Status"]] || "").toLowerCase();
     
     if (sku && status === "active" && !processedMap.has(sku)) {
       processedMap.set(sku, row);
