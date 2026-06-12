@@ -33,7 +33,7 @@ function ingestShopify(folder) {
   const targetHeaders = VDM_CONFIG.HEADERS.SHOPIFY;
 
   const map = new Map();
-  for (let i = 1; i < data.length; i++) {
+  for (var i = 1; i < data.length; i++) {
     const row = data[i];
     const sku = sanitize(row[hMap["Variant SKU"]]);
     const status = (row[hMap["Status"]] || "").toLowerCase();
@@ -76,13 +76,13 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const headers = data[0];
   const skuIdx = headers.indexOf(skuHeader);
-  const netSalesIdx = headers.indexOf("Net items sold");
 
   const rows = data.slice(1).map(r => {
     const sku = sanitize(r[skuIdx]);
+    if (!sku) return null;
     // If sales data, ensure we extract specific columns. Otherwise keep row.
     return [sku, ...r];
-  });
+  }).filter(r => r !== null);
 
   writeToHiddenTab(tabName, [["SKU_ANCHOR", ...headers], ...rows]);
 }
@@ -97,11 +97,12 @@ function ingestSalesCSV(folder) {
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const hIdx = getHeaderMap(data[0]);
+  const salesCol = hIdx["Net items sold"];
   
   const rows = data.slice(1).map(r => {
     const sku = sanitize(r[hIdx["Product variant SKU"]]);
-    return [sku, sku, parseFloat(r[hIdx["Net items sold"]]) || 0];
-  });
+    return [sku, sku, parseFloat(r[salesCol]) || 0];
+  }).filter(r => r[0] !== "");
 
   writeToHiddenTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows]);
 }

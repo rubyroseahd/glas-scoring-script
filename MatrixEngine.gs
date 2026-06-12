@@ -58,9 +58,10 @@ function executeDashboardRefresh() {
       // Velocity Score (I)
       const units90 = parseFloat(salesMap.get(sku)) || 0;
       let vScore = 0;
-      if (units90 === 1) vScore = 1;
-      else if (units90 > 1) {
-        const rank = salesArray.filter(v => v < units90).length / (salesArray.length - 1);
+      if (units90 === 1) {
+        vScore = 1;
+      } else if (units90 > 1 && salesArray.length > 0) {
+        const rank = salesArray.length > 1 ? salesArray.filter(v => v < units90).length / (salesArray.length - 1) : 0.5;
         if (rank >= 0.80) vScore = 4;
         else if (rank >= 0.55) vScore = 3;
         else vScore = 2;
@@ -74,9 +75,12 @@ function executeDashboardRefresh() {
 
       // Stock Score (K)
       const webStock = parseFloat(webMap.get(sku)) || 0;
-      let sScore = (fulfillment === "WEBONLY") ? 2 : 0;
+      let sScore = 0;
       if (fulfillment !== "WEBONLY") {
-        const dos = units90 === 0 ? 999 : webStock / (units90 / 90);
+        sScore = 2;
+      } else {
+        const dailyVelocity = units90 / 90;
+        const dos = dailyVelocity <= 0 ? 999 : webStock / dailyVelocity;
         if (dos <= 30) sScore = 3;
         else if (dos <= 120) sScore = 2;
         else if (dos <= 180) sScore = 1;
