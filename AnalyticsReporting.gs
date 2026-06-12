@@ -13,9 +13,10 @@ function generateAllReports() {
     
     // Load Shopify Memory Map for Handle and Vendor lookups
     const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
+    const sRawIdx = getHeaderMap(shopifyRaw[0]); // Dynamic index mapping
     const shopifyMap = new Map(shopifyRaw.slice(1).map(r => {
-      // Map SKU Anchor to Handle (index 2) and Vendor (index 7) based on ingestShopify logic
-      return [r[0], { handle: r[2], vendor: r[7] }];
+      // Map SKU Anchor to Handle and Vendor metadata safely
+      return [r[0], { handle: r[sRawIdx["Handle"]], vendor: r[sRawIdx["Vendor"]] }];
     }));
 
     const idx = {};
@@ -57,8 +58,10 @@ function generateSummaryTab(rows, idx, shopifyMap) {
 
   const out = [["Migration Path", "SKU Count", "Invoiced Cost Value"]];
   Object.keys(matrix).forEach(k => out.push([k, matrix[k].count, matrix[k].val]));
-  sheet.getRange(1, 1, out.length, 3).setValues(out);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 3));
+  if (out.length > 0) {
+    sheet.getRange(1, 1, out.length, 3).setValues(out);
+    applyHeaderStyle(sheet.getRange(1, 1, 1, 3));
+  }
 
   // Block 2: House Brands
   const houseRows = rows.filter(r => {
@@ -66,8 +69,23 @@ function generateSummaryTab(rows, idx, shopifyMap) {
     const vendorName = (shopifyMap.get(sku)?.vendor || "").toUpperCase();
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
-  // Simplified example logic for GLAS block
-  sheet.getRange(out.length + 3, 1).setValue("House Brand Analytics").setFontWeight("bold");
+
+  // Block 2: House Brand Strategic Distribution
+  const houseTiers = {};
+  houseRows.forEach(hr => {
+    const tier = hr[idx["Target Strategic Tier"]].split(" (")[0];
+    houseTiers[tier] = (houseTiers[tier] || 0) + 1;
+  });
+
+  const houseOut = [["House Strategic Tier", "SKU Count"]];
+  Object.keys(houseTiers).forEach(t => houseOut.push([t, houseTiers[t]]));
+
+  const startRow = out.length + 4;
+  sheet.getRange(startRow - 1, 1).setValue("House Brand Analytics").setFontWeight("bold");
+  if (houseOut.length > 0) {
+    sheet.getRange(startRow, 1, houseOut.length, 2).setValues(houseOut);
+    applyHeaderStyle(sheet.getRange(startRow, 1, 1, 2));
+  }
 }
 
 function generateSyncAudit(rows, idx, shopifyMap) {
@@ -80,10 +98,15 @@ function generateSyncAudit(rows, idx, shopifyMap) {
   const syncRows = rows.map(r => {
     const sku = r[idx["SKU Anchor Key"]];
     const mkdn = parseFloat(r[idx["VDM Markdown Depth %"]]) || 0;
+    
+    // Terminology Alignment (Manual Section 4.4): Standardize Action keywords
+    const status = r[idx["Pricing Migration Status"]];
+    const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable") ? "NO CHANGE" : "UPDATED";
+
     return [
       sku,
       shopifyMap.get(sku)?.handle || "",
-      r[idx["Pricing Migration Status"]],
+      action,
       r[idx["Target Strategic Tier"]],
       mkdn,
       r[idx["Live Storefront Price"]],
@@ -95,8 +118,10 @@ function generateSyncAudit(rows, idx, shopifyMap) {
     ];
   });
 
-  sheet.getRange(1, 1, 1, 11).setValues([headers]);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 11));
+  if (headers.length > 0) {
+    sheet.getRange(1, 1, 1, 11).setValues([headers]);
+    applyHeaderStyle(sheet.getRange(1, 1, 1, 11));
+  }
   if (syncRows.length > 0) sheet.getRange(2, 1, syncRows.length, 11).setValues(syncRows);
 }
 
@@ -129,8 +154,10 @@ function generateMasterLedger(rows, idx, shopifyMap) {
     ];
   });
 
-  sheet.getRange(1, 1, 1, 15).setValues([headers]);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 15));
+  if (headers.length > 0) {
+    sheet.getRange(1, 1, 1, 15).setValues([headers]);
+    applyHeaderStyle(sheet.getRange(1, 1, 1, 15));
+  }
   if (ledgerRows.length > 0) sheet.getRange(2, 1, ledgerRows.length, 15).setValues(ledgerRows);
 }
 
@@ -157,8 +184,10 @@ function generateSupplierScorecard(rows, idx, shopifyMap) {
     out.push([v, vendorTotals[v].skus, vendorTotals[v].stockValue, vendorTotals[v].sales90]);
   });
 
-  sheet.getRange(1, 1, out.length, 4).setValues(out);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
+  if (out.length > 0) {
+    sheet.getRange(1, 1, out.length, 4).setValues(out);
+    applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
+  }
   sheet.getRange(2, 3, out.length - 1, 1).setNumberFormat("$#,##0.00");
 }
 
@@ -178,7 +207,9 @@ function logElasticitySnapshot(rows, idx) {
     sheet.appendRow(["Snapshot Date", "SKU", "Markdown Depth", "Price", "Velocity"]);
     applyHeaderStyle(sheet.getRange(1, 1, 1, 5));
   }
-  sheet.getRange(sheet.getLastRow() + 1, 1, snapshot.length, 5).setValues(snapshot);
+  if (snapshot.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, snapshot.length, 5).setValues(snapshot);
+  }
 }
 
 function executeFlexibleRefreshProcess() {

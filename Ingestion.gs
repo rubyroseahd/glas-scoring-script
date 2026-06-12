@@ -35,13 +35,16 @@ function ingestShopify(folder) {
   const map = new Map();
   for (var i = 1; i < data.length; i++) {
     const row = data[i];
-    const sku = sanitize(row[hMap["Variant SKU"]]);
-    const status = (row[hMap["Status"]] || "").toLowerCase();
+    const sku = safeStr(row[hMap["Variant SKU"]]).toUpperCase();
+    const status = safeStr(row[hMap["Status"]]).toLowerCase();
     
     if (sku && status === "active" && !map.has(sku)) {
       // Map row to the exact sequence in outHeaders
       const processedRow = [sku]; // Column A Anchor
-      targetHeaders.forEach(h => processedRow.push(row[hMap[h]]));
+      targetHeaders.forEach(h => {
+        const val = row[hMap[h]];
+        processedRow.push(h.includes("Price") || h.includes("Qty") || h.includes("item") ? safeNum(val) : safeStr(val));
+      });
       map.set(sku, processedRow);
     }
   }
@@ -60,9 +63,12 @@ function ingestEEI(folder, fileName, tabName) {
   const targetHeaders = tabName === VDM_CONFIG.TABS.RAW_EEI_USA ? VDM_CONFIG.HEADERS.USA_WAREHOUSE : VDM_CONFIG.HEADERS.WEB_WAREHOUSE;
   
   const rows = data.slice(5).map(r => {
-    const sku = sanitize(r[hMap["Item Code"]]);
+    const sku = safeStr(r[hMap["Item Code"]]).toUpperCase();
     const out = [sku];
-    targetHeaders.forEach(h => out.push(r[hMap[h]]));
+    targetHeaders.forEach(h => {
+      const val = r[hMap[h]];
+      out.push(h.includes("Stock") || h.includes("Sales") || h.includes("days") ? safeNum(val) : safeStr(val));
+    });
     return out;
   });
 
@@ -78,7 +84,7 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
   const skuIdx = headers.indexOf(skuHeader);
 
   const rows = data.slice(1).map(r => {
-    const sku = sanitize(r[skuIdx]);
+    const sku = safeStr(r[skuIdx]).toUpperCase();
     if (!sku) return null;
     // If sales data, ensure we extract specific columns. Otherwise keep row.
     return [sku, ...r];
@@ -100,8 +106,8 @@ function ingestSalesCSV(folder) {
   const salesCol = hIdx["Net items sold"];
   
   const rows = data.slice(1).map(r => {
-    const sku = sanitize(r[hIdx["Product variant SKU"]]);
-    return [sku, sku, parseFloat(r[salesCol]) || 0];
+    const sku = safeStr(r[hIdx["Product variant SKU"]]).toUpperCase();
+    return [sku, sku, safeNum(r[salesCol])];
   }).filter(r => r[0] !== "");
 
   writeToHiddenTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows]);
@@ -125,17 +131,17 @@ function executeCostResolutionWaterfall() {
   };
 
   const costMap = new Map();
-  costData.slice(1).forEach(r => costMap.set(sanitize(r[cIdx.sku]), r));
+  costData.slice(1).forEach(r => costMap.set(safeStr(r[cIdx.sku]).toUpperCase(), r));
 
   const resolved = [["SKU Anchor", "Resolved Cost"]];
   shopifyData.slice(1).forEach(r => {
     const sku = r[0];
-    const shopifyCost = parseFloat(r[sIdx.cost]) || 0;
+    const shopifyCost = safeNum(r[sIdx.cost]);
     const ext = costMap.get(sku);
     
     let final = 0;
     if (ext) {
-      final = parseFloat(ext[cIdx.eei]) || parseFloat(ext[cIdx.glas]) || parseFloat(ext[cIdx.cotr]) || shopifyCost;
+      final = safeNum(ext[cIdx.eei]) || safeNum(ext[cIdx.glas]) || safeNum(ext[cIdx.cotr]) || shopifyCost;
     } else {
       final = shopifyCost;
     }
@@ -153,7 +159,7 @@ function writeToHiddenTab(name, data) {
     sheet.hideSheet();
   }
   sheet.clear().clearFormats();
-  if (data.length > 0) {
+  if (data.length > 0 && data[0] && data[0].length > 0) {
     sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
     sheet.getRange(1, 1, data.length, 1).setNumberFormat("@");
   }

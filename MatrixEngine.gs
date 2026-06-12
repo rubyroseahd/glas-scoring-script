@@ -21,24 +21,24 @@ function executeDashboardRefresh() {
     const wIdx = getHeaderMap(webData[0]);
     const cIdx = getHeaderMap(costData[0]);
 
-    const salesMap = new Map(salesData.slice(1).map(r => [r[0], r[vIdx["Net items sold"]]]));
-    const usaMap = new Map(usaData.slice(1).map(r => [r[0], r]));
-    const webMap = new Map(webData.slice(1).map(r => [r[0], r[wIdx["EEI Web Warehouse On Hand Stock"]]]));
-    const costMap = new Map(costData.slice(1).map(r => [r[0], r[cIdx["Resolved Cost"]]]));
+    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]), safeNum(r[vIdx["Net items sold"]])]));
+    const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]), r]));
+    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]), safeNum(r[wIdx["EEI Web Warehouse On Hand Stock"]])]));
+    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]), safeNum(r[cIdx["Resolved Cost"]])]));
     
     // Load Registries
-    const gwpSet = new Set(settingsData.map(r => sanitize(r[0])));
-    const launchSet = new Set(settingsData.map(r => sanitize(r[1])));
-    const mapBrands = settingsData.slice(1).map(r => String(r[2]).toUpperCase()).filter(v => v);
-    const affiliateRate = parseFloat(settingsData[1][4]) || 0;
+    const gwpSet = new Set(settingsData.map(r => safeStr(r[0]).toUpperCase()));
+    const launchSet = new Set(settingsData.map(r => safeStr(r[1]).toUpperCase()));
+    const mapBrands = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v);
+    const affiliateRate = settingsData.length > 1 ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
 
     // Velocity Percentile Setup
-    const salesArray = Array.from(salesMap.values()).map(v => parseFloat(v) || 0).filter(v => v > 1).sort((a,b) => a-b);
+    const salesArray = Array.from(salesMap.values()).map(v => safeNum(v)).filter(v => v > 1).sort((a,b) => a-b);
 
     const results = [];
     shopifyData.slice(1).forEach(row => {
       const sku = row[0];
-      const vendor = String(row[sIdx["Vendor"]]).toUpperCase();
+      const vendor = safeStr(row[sIdx["Vendor"]]).toUpperCase();
       
       // A: SKU Anchor
       // B: Gatekeeper
@@ -47,21 +47,22 @@ function executeDashboardRefresh() {
       else if (launchSet.has(sku)) gate = "New Launch";
       else if (mapBrands.some(b => vendor.includes(b))) gate = "3rd Party MAP";
 
-      const fulfillment = row[sIdx["Fulfillment service"]] || "SHARED";
-      const cost = parseFloat(costMap.get(sku)) || 0;
-      const price = parseFloat(row[sIdx["Variant Price"]]) || 0;
-      const rawCompare = parseFloat(row[sIdx["Variant Compare At Price"]]) || 0;
+      const fulfillment = safeStr(row[sIdx["Fulfillment service"]]) || "SHARED";
+      const cost = safeNum(costMap.get(sku));
+      const price = safeNum(row[sIdx["Variant Price"]]);
+      const rawCompare = safeNum(row[sIdx["Variant Compare At Price"]]);
       const compareMSRP = (rawCompare === 0 || isNaN(rawCompare)) ? price : rawCompare;
       const curMarkdown = compareMSRP === price ? 0 : (compareMSRP - price) / compareMSRP;
       const curMargin = price === 0 ? 0 : (price - cost) / price;
       
       // Velocity Score (I)
-      const units90 = parseFloat(salesMap.get(sku)) || 0;
+      const units90 = safeNum(salesMap.get(sku));
       let vScore = 0;
       if (units90 === 1) {
         vScore = 1;
-      } else if (units90 > 1 && salesArray.length > 0) {
-        const rank = salesArray.length > 1 ? salesArray.filter(v => v < units90).length / (salesArray.length - 1) : 0.5;
+      } else if (units90 > 1) {
+        const den = salesArray.length - 1;
+        const rank = den > 0 ? salesArray.filter(v => v < units90).length / den : 0;
         if (rank >= 0.80) vScore = 4;
         else if (rank >= 0.55) vScore = 3;
         else vScore = 2;
@@ -74,13 +75,13 @@ function executeDashboardRefresh() {
       else if (curMargin >= 0.35) mScore = 1;
 
       // Stock Score (K)
-      const webStock = parseFloat(webMap.get(sku)) || 0;
+      const webStock = safeNum(webMap.get(sku));
       let sScore = 0;
-      if (fulfillment !== "WEBONLY") {
+      if (fulfillment === "WEBONLY") {
         sScore = 2;
       } else {
-        const dailyVelocity = units90 / 90;
-        const dos = dailyVelocity <= 0 ? 999 : webStock / dailyVelocity;
+        const dailyVelocity = safeNum(units90 / 90);
+        const dos = dailyVelocity > 0 ? webStock / dailyVelocity : 999;
         if (dos <= 30) sScore = 3;
         else if (dos <= 120) sScore = 2;
         else if (dos <= 180) sScore = 1;
@@ -98,10 +99,10 @@ function executeDashboardRefresh() {
       else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; }
       else if (totalScore >= 4) { tier = "Accelerator (50% Off)"; vdmMarkdown = 0.50; }
 
-      const usaRow = usaMap.get(sku) || [0,0,0,0];
-      const usaStock = parseFloat(usaRow[uIdx["EEI USA Warehouse On Hand Stock"]]) || 0;
+      const usaRow = usaMap.get(sku);
+      const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA Warehouse On Hand Stock"]]) : 0;
       const totalStock = usaStock + webStock;
-      const shopifyQty = parseFloat(row[sIdx["Variant Inventory Qty"]]) || 0;
+      const shopifyQty = safeNum(row[sIdx["Variant Inventory Qty"]]);
       const propPrice = compareMSRP * (1 - vdmMarkdown);
       const simNet = propPrice * (1 - affiliateRate);
       const stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
@@ -110,7 +111,7 @@ function executeDashboardRefresh() {
       const curTierLabel = curMarkdown === 0 ? "Full MSRP" : (curMarkdown <= 0.19 ? "Promo Tier 1 (10-15%)" : (curMarkdown <= 0.35 ? "Promo Tier 2 (20-25%)" : (curMarkdown <= 0.55 ? "Promo Tier 3 (40-50%)" : "Clearance")));
       
       // X: Governance Override
-      const b2b30DSales = parseFloat(usaRow[uIdx["Sales Past 30 Days"]]) || 0;
+      const b2b30DSales = usaRow ? safeNum(usaRow[uIdx["Sales Past 30 Days"]]) : 0;
       let migration = (vdmMarkdown > curMarkdown) ? "🚨 Deepen Discount" : "📈 Price Recovery/Lift";
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
       if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= 500 && b2b30DSales > 0) {

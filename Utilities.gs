@@ -31,6 +31,30 @@ function sanitizeKey(key) {
 }
 
 /**
+ * Safely converts a value to a number, stripping currency symbols/commas.
+ * Returns 0 instead of NaN for invalid data.
+ * @param {any} value
+ * @return {number}
+ */
+function safeNum(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  const cleanValue = value.toString().replace(/[$,\s]/g, "");
+  const num = parseFloat(cleanValue);
+  return isNaN(num) ? 0 : num;
+}
+
+/**
+ * Safely sanitizes a string, returning an empty string for null/undefined.
+ * @param {any} value
+ * @return {string}
+ */
+function safeStr(value) {
+  if (value === null || value === undefined) return "";
+  return value.toString().trim();
+}
+
+/**
  * Creates a mapping object from a header row to avoid hardcoded indices.
  * Usage: const idx = getHeaderMap(sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]);
  * @param {string[]} headers
@@ -38,8 +62,9 @@ function sanitizeKey(key) {
  */
 function getHeaderMap(headers) {
   return headers.reduce((acc, header, index) => {
-    const cleanHeader = header.toString().trim();
-    acc[cleanHeader] = index;
+    if (header !== null && header !== undefined) {
+      acc[header.toString().trim()] = index;
+    }
     return acc;
   }, {});
 }
