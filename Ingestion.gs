@@ -1,0 +1,120 @@
+/**
+ * MODULE 2: INGESTION ENGINE
+ * Extraction, Filtering, and Alphanumeric Sanitization Gateway
+ */
+
+function runDataIngestion() {
+  try {
+    const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
+    
+    processShopifyFile(folder);
+    processEEIFile(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA);
+    processEEIFile(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB);
+    processGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.SALES, VDM_CONFIG.TABS.RAW_SALES);
+    processGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST);
+    
+    resolveCostHierarchy();
+    
+  } catch (e) {
+    logError("Ingestion", e);
+    throw e;
+  }
+}
+
+function processShopifyFile(folder) {
+  const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SHOPIFY);
+  if (!files.hasNext()) return;
+  
+  const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+  const headers = csvData[0];
+  const skuIdx = headers.findIndex(h => h.includes("Variant SKU"));
+  const statusIdx = headers.findIndex(h => h === "Status");
+  
+  const processedMap = new Map();
+  
+  for (let i = 1; i < csvData.length; i++) {
+    const row = csvData[i];
+    const sku = sanitizeKey(row[skuIdx]);
+    const status = (row[statusIdx] || "").toLowerCase();
+    
+    if (sku && status === "active" && !processedMap.has(sku)) {
+      processedMap.set(sku, row);
+    }
+  }
+  
+  const output = [headers, ...Array.from(processedMap.values())];
+  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY);
+  if (sheet.getIndex() > 0) sheet.hideSheet(); // Maintain hidden status if desired
+  sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
+  sheet.getRange("A:Z").setNumberFormat("@");
+}
+
+function processEEIFile(folder, fileName, tabName) {
+  const files = folder.getFilesByName(fileName);
+  if (!files.hasNext()) return;
+  
+  const csvData = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+  if (csvData.length < 5) return;
+  
+  const headers = csvData[4];
+  const itemCodeIdx = headers.findIndex(h => h === "Item Code");
+  
+  const rows = csvData.slice(5).map(row => {
+    row[itemCodeIdx] = sanitizeKey(row[itemCodeIdx]);
+    return row;
+  });
+  
+  const output = [headers, ...rows];
+  const sheet = getOrCreateSheet(tabName, true);
+  sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
+  sheet.getRange(1, itemCodeIdx + 1, output.length, 1).setNumberFormat("@");
+}
+
+function processGenericCSV(folder, fileName, tabName) {
+  const files = folder.getFilesByName(fileName);
+  if (!files.hasNext()) return;
+  
+  const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+  const sheet = getOrCreateSheet(tabName, true);
+  sheet.clear().getRange(1, 1, data.length, data[0].length).setValues(data);
+}
+
+function resolveCostHierarchy() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shopifySheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
+  const costSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_COST);
+  
+  const shopifyData = shopifySheet.getDataRange().getValues();
+  const costData = costSheet.getDataRange().getValues();
+  
+  const sIdx = getHeaderMap(shopifyData[0]);
+  const cIdx = getHeaderMap(costData[0]);
+  
+  const costLookup = {};
+  costData.slice(1).forEach(r => {
+    costLookup[sanitizeKey(r[cIdx["SKU"]])] = {
+      eei: parseFloat(r[cIdx["EEI Last Purchase Price"]]) || 0,
+      glas: parseFloat(r[cIdx["GLAS Costing"]]) || 0,
+      cotr: parseFloat(r[cIdx["COTR Last Purchase Price"]]) || 0
+    };
+  });
+  
+  const resolvedCosts = [["SKU Anchor", "Resolved Cost"]];
+  
+  shopifyData.slice(1).forEach(row => {
+    const sku = sanitizeKey(row[sIdx["Variant SKU"]]);
+    const shopifyCost = parseFloat(row[sIdx["Cost per item"]]) || 0;
+    const external = costLookup[sku] || {eei: 0, glas: 0, cotr: 0};
+    
+    let finalCost = 0;
+    if (external.eei > 0) finalCost = external.eei;
+    else if (external.glas > 0) finalCost = external.glas;
+    else if (external.cotr > 0) finalCost = external.cotr;
+    else finalCost = shopifyCost;
+    
+    resolvedCosts.push([sku, finalCost]);
+  });
+  
+  const masterCostSheet = getOrCreateSheet(VDM_CONFIG.TABS.MASTER_COST, true);
+  masterCostSheet.clear().getRange(1, 1, resolvedCosts.length, 2).setValues(resolvedCosts);
+}
