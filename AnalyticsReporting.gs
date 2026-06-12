@@ -249,7 +249,32 @@ function runFullRefreshCycle() {
   try {
     runDataIngestion();
     refreshDashboardMatrix();
-    generateExecutiveSummary();
+
+    // --- NEW: Extract Dash Data once for all reporting modules ---
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
+    const dashData = dash.getDataRange().getValues();
+    const dIdx = getHeaderMap(dashData[0]);
+    const rows = dashData.slice(1);
+
+    // Rebuild vendor map for the scorecard
+    const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
+    const shopifyData = shopifyRaw.getDataRange().getValues();
+    const sIdx = getHeaderMap(shopifyData[0]);
+    const vendorMap = {};
+    shopifyData.slice(1).forEach(r => {
+      const itemSku = sanitizeKey(r[sIdx["Variant SKU"]]);
+      if (itemSku) vendorMap[itemSku] = r[sIdx["Vendor"]];
+    });
+
+    // --- Execute all modules with correct arguments ---
+    generateExecutiveSummary(rows, dIdx);
+    buildStorefrontSyncAudit(rows, dIdx);
+    logPricingElasticitySnapshot(rows, dIdx);
+    generateSupplierScorecard(rows, vendorMap);
+    generateWarehouseAgingReport(rows);
+    generateMAPComplianceReport(rows);
+
     ui.alert("VDM v2.2 Refresh Cycle Complete. Strategic Tiers Updated.");
   } catch (e) {
     logError("MainCycle", e);
