@@ -250,51 +250,57 @@ function buildStorefrontSyncAudit(dashRows, dIdx) {
 function generateMasterLedgerTab(dashRows, dIdx) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ledgerSheet = getOrCreateSheet(VDM_CONFIG.TABS.MASTER_LEDGER);
+  
+  if (dashRows.length === 0) return;
+
   ledgerSheet.clear();
   ledgerSheet.clearConditionalFormatRules();
 
-  const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
-  const shopifyData = shopifyRaw.getDataRange().getValues();
-  const sIdx = getHeaderMap(shopifyData[0]);
+  const dashName = VDM_CONFIG.TABS.DASHBOARD;
+  const shopifyName = VDM_CONFIG.TABS.RAW_SHOPIFY;
+  const shopifyRaw = ss.getSheetByName(shopifyName);
+  const sIdx = getHeaderMap(shopifyRaw.getDataRange().getValues()[0]);
+  const handleColIndex = sIdx["Handle"] + 1; // 1-indexed for VLOOKUP
 
-  const handleMap = {};
-  shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[sIdx["Variant SKU"]])] = r[sIdx["Handle"]]);
-
-  if (dashRows.length === 0) return;
-
-  const ledgerData = dashRows.map(r => {
-    const sku = r[dIdx["SKU Anchor Key"]];
-    const status = r[dIdx["Pricing Migration Status"]] || "";
-    const discountDepth = r[dIdx["VDM Markdown Depth %"]];
+  const formulaMatrix = dashRows.map((_, i) => {
+    const r = i + 2; // Data starts on row 2
     return [
-      sku,                                            // Col 1: SKU
-      handleMap[sku] || "",                           // Col 2: Handle
-      r[dIdx["Gatekeeper Status"]],                   // Col 3: Gatekeeper Status
-      r[dIdx["Target Strategic Tier"]],               // Col 4: Final Tier
-      status.includes("✓") ? "NO CHANGE" : "UPDATED", // Col 5: Action
-      r[dIdx["Live Storefront Price"]],               // Col 6: Old Variant Price
-      r[dIdx["Live Compare MSRP"]],                   // Col 7: Old Compare At Price
-      r[dIdx["Live Compare MSRP"]],                   // Col 8: Base Price Used
-      discountDepth,                                  // Col 9: Final Discount %
-      r[dIdx["New Proposed Storefront Price"]],       // Col 10: New Variant Price
-      discountDepth > 0 ? r[dIdx["Live Compare MSRP"]] : "", // Col 11: New Compare At Price
-      r[dIdx["Simulated Checkout Net Price"]],        // Col 12: Simulated Checkout Net Price
-      r[dIdx["Resolved Cost Base"]],                  // Col 13: Resolved Cost Base
-      r[dIdx["Final Simulated Stacked Margin %"]],    // Col 14: Final Stacked Margin %
-      r[dIdx["Profit Guardrail Status Alert"]]        // Col 15: Guardrail Alert
+      `='${dashName}'!A${r}`,                                         // SKU
+      `=VLOOKUP(A${r}, '${shopifyName}'!$A:$ZZ, ${handleColIndex}, 0)`, // Handle
+      `='${dashName}'!B${r}`,                                         // Gatekeeper Status
+      `='${dashName}'!M${r}`,                                         // Final Tier
+      `=IF(ISNUMBER(SEARCH("✓", '${dashName}'!X${r})), "NO CHANGE", "UPDATED")`, // Action
+      `='${dashName}'!E${r}`,                                         // Old Variant Price
+      `='${dashName}'!F${r}`,                                         // Old Compare At Price
+      `='${dashName}'!F${r}`,                                         // Base Price Used
+      `='${dashName}'!N${r}`,                                         // Final Discount %
+      `='${dashName}'!S${r}`,                                         // New Variant Price
+      `=IF('${dashName}'!N${r}>0, '${dashName}'!F${r}, "")`,           // New Compare At Price
+      `='${dashName}'!T${r}`,                                         // Simulated Checkout Net Price
+      `='${dashName}'!D${r}`,                                         // Resolved Cost Base
+      `='${dashName}'!U${r}`,                                         // Final Stacked Margin %
+      `='${dashName}'!V${r}`                                          // Guardrail Alert
     ];
   });
 
   const headers = [["SKU", "Handle", "Gatekeeper Status", "Final Tier", "Action", "Old Variant Price", "Old Compare At Price", "Base Price Used", "Final Discount %", "New Variant Price", "New Compare At Price", "Simulated Checkout Net Price", "Resolved Cost Base", "Final Stacked Margin %", "Guardrail Alert"]];
   ledgerSheet.getRange(1, 1, 1, 15).setValues(headers);
   applyHeaderStyle(ledgerSheet.getRange(1, 1, 1, 15));
-  ledgerSheet.getRange(2, 1, ledgerData.length, 15).setValues(ledgerData);
+  ledgerSheet.getRange(2, 1, formulaMatrix.length, 15).setFormulas(formulaMatrix);
 
-  const range = ledgerSheet.getRange(2, 1, ledgerData.length, 15);
+  // Formatting for Currency and Percentages
+  ledgerSheet.getRange(2, 6, formulaMatrix.length, 3).setNumberFormat("$#,##0.00");
+  ledgerSheet.getRange(2, 9, formulaMatrix.length, 1).setNumberFormat("0%");
+  ledgerSheet.getRange(2, 10, formulaMatrix.length, 4).setNumberFormat("$#,##0.00");
+  ledgerSheet.getRange(2, 14, formulaMatrix.length, 1).setNumberFormat("0%");
+
+  // Visual Alerting Step: Conditional Formatting for Guardrail Alert (Row-wide)
+  const range = ledgerSheet.getRange(2, 1, formulaMatrix.length, 15);
   const rule = SpreadsheetApp.newConditionalFormatRule()
     .whenFormulaSatisfied('=$O2="❌ BLOCKED"')
     .setBackground(VDM_CONFIG.DESIGN.ALERT_BREACH_BG)
     .setFontColor(VDM_CONFIG.DESIGN.ALERT_BREACH_TEXT)
+    .setBold(true)
     .setRanges([range])
     .build();
   ledgerSheet.setConditionalFormatRules([rule]);
@@ -319,7 +325,7 @@ function runFullRefreshCycle() {
     const sIdx = getHeaderMap(shopifyData[0]);
     const vendorMap = {};
     shopifyData.slice(1).forEach(r => {
-      const itemSku = sanitizeKey(r[sIdx["Variant SKU"]]);
+      const itemSku = sanitizeKey(r[sIdx["SKU_ANCHOR"]]);
       if (itemSku) vendorMap[itemSku] = r[sIdx["Vendor"]];
     });
 
@@ -332,9 +338,11 @@ function runFullRefreshCycle() {
     generateMAPComplianceReport(rows);
     generateMasterLedgerTab(rows, dIdx);
 
-    ui.alert("VDM v2.2 Refresh Cycle Complete. Strategic Tiers Updated.");
+    ui.alert("VDM v2.2.2 Refresh Cycle Complete. 15-Minute Execution Cycle finished.");
   } catch (e) {
     logError("MainCycle", e);
     ui.alert("ERROR: " + e.message);
+  }
+}
   }
 }
