@@ -9,7 +9,7 @@ function runDataIngestion() {
     ingestShopify(folder);
     ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA);
     ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB);
-    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.SALES, VDM_CONFIG.TABS.RAW_SALES, "Product variant SKU");
+    ingestSalesCSV(folder);
     ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST, "SKU");
     
     executeCostResolutionWaterfall();
@@ -30,6 +30,7 @@ function ingestShopify(folder) {
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const headers = data[0];
+  const handleIdx = headers.indexOf("Handle");
   const skuIdx = headers.indexOf("Variant SKU");
   const statusIdx = headers.indexOf("Status");
   const priceIdx = headers.indexOf("Variant Price");
@@ -44,12 +45,12 @@ function ingestShopify(folder) {
     const row = data[i];
     const sku = sanitize(row[skuIdx]);
     if (sku && row[statusIdx].toLowerCase() === "active" && !map.has(sku)) {
-      // Structure: Anchor, SKU, Status, Price, Compare, Fulfill, Vendor, Qty, ShopifyCost
-      map.set(sku, [sku, sku, row[statusIdx], row[priceIdx], row[compareIdx], row[fulfillIdx], row[vendorIdx], row[qtyIdx], row[costIdx]]);
+      // Structure: Anchor, Handle, SKU, Status, Price, Compare, Fulfill, Vendor, Qty, ShopifyCost
+      map.set(sku, [sku, row[handleIdx], sku, row[statusIdx], row[priceIdx], row[compareIdx], row[fulfillIdx], row[vendorIdx], row[qtyIdx], row[costIdx]]);
     }
   }
 
-  const outHeaders = ["SKU_ANCHOR", "Variant SKU", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"];
+  const outHeaders = ["SKU_ANCHOR", "Handle", "Variant SKU", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"];
   writeToHiddenTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [outHeaders, ...Array.from(map.values())]);
 }
 
@@ -59,9 +60,12 @@ function ingestEEI(folder, fileName, tabName) {
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const headers = data[4]; // Row 5 calibration
-  const skuIdx = headers.indexOf("Item Code");
-  const stockIdx = 11; // Column L
-  const salesIdx = headers.indexOf("Sales Past 30 Days");
+  const hMap = getHeaderMap(headers);
+  
+  const skuIdx = hMap["Item Code"];
+  // Resiliency: Search for specific warehouse header, fallback to Col L (index 11)
+  const stockIdx = headers.findIndex(h => h.includes("On Hand Stock")) !== -1 ? headers.findIndex(h => h.includes("On Hand Stock")) : 11;
+  const salesIdx = hMap["Sales Past 30 Days"];
 
   const rows = data.slice(5).map(r => {
     const sku = sanitize(r[skuIdx]);
@@ -89,12 +93,35 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
   writeToHiddenTab(tabName, [["SKU_ANCHOR", ...headers], ...rows]);
 }
 
+/**
+ * Dedicated Sales Ingestion to maintain strict 3-column contract: [SKU_ANCHOR, SKU, Net items sold]
+ * Prevents downstream VLOOKUP index corruption.
+ */
+function ingestSalesCSV(folder) {
+  const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SALES);
+  if (!files.hasNext()) throw new Error("Sales file missing");
+  
+  const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+  const hIdx = getHeaderMap(data[0]);
+  
+  const rows = data.slice(1).map(r => {
+    const sku = sanitize(r[hIdx["Product variant SKU"]]);
+    return [sku, sku, parseFloat(r[hIdx["Net items sold"]]) || 0];
+  });
+
+  writeToHiddenTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows]);
+}
+
 function executeCostResolutionWaterfall() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shopifyData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
+  const shopifySheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
+  const shopifyData = shopifySheet.getDataRange().getValues();
   const costData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_COST).getDataRange().getValues();
   
+  const shopifyHeaders = shopifyData[0];
   const costHeaders = costData[0];
+  
+  const sIdx = { cost: shopifyHeaders.indexOf("Cost per item") };
   const cIdx = {
     sku: costHeaders.indexOf("SKU"),
     eei: costHeaders.indexOf("EEI LAST PURCHASE PRICE"),
@@ -108,7 +135,7 @@ function executeCostResolutionWaterfall() {
   const resolved = [["SKU Anchor", "Resolved Cost"]];
   shopifyData.slice(1).forEach(r => {
     const sku = r[0];
-    const shopifyCost = parseFloat(r[8]) || 0;
+    const shopifyCost = parseFloat(r[sIdx.cost]) || 0;
     const ext = costMap.get(sku);
     
     let final = 0;

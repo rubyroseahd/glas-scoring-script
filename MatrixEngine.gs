@@ -35,25 +35,30 @@ function executeDashboardRefresh() {
     const rWeb = VDM_CONFIG.TABS.RAW_EEI_WEB;
     const rCost = VDM_CONFIG.TABS.MASTER_COST;
 
+    // Define Column Letters for Internal Formula References
+    const COL = { SKU: 'A', GATE: 'B', FULFILL: 'C', COST: 'D', PRICE: 'E', MSRP: 'F', MKDN: 'G', MARG: 'H', VEL: 'I', STK: 'K', TOTAL: 'L', TIER: 'M', TARGET_MKDN: 'N', WH_TOTAL: 'O', WH_WEB: 'P', SHOP_QTY: 'Q', PROP_PRICE: 'S', NET_SIM: 'T', STACK_MARG: 'U', GUARD: 'V', CUR_TIER: 'W' };
+
     const formulas = skus.map((_, i) => {
       const r = i + 2;
+      const sku = `${COL.SKU}${r}`;
+
       return [
-        `=IFS(ISNUMBER(MATCH(A${r}, ${ctrl}!$A:$A, 0)), "⚠️ Active GWP Promo", ISNUMBER(MATCH(A${r}, ${ctrl}!$B:$B, 0)), "New Launch", SUMPRODUCT(--ISNUMBER(SEARCH(${ctrl}!$C$2:$C$50, VLOOKUP(A${r}, ${rShop}!$A:$G, 7, 0)))), "3rd Party MAP", TRUE, "None")`,
-        `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$G, 6, 0), "SHARED")`,
-        `=VLOOKUP(A${r}, ${rCost}!$A:$B, 2, 0)`,
-        `=VLOOKUP(A${r}, ${rShop}!$A:$G, 4, 0)`,
-        `=IF(OR(ISBLANK(VLOOKUP(A${r}, ${rShop}!$A:$E, 5, 0)), VLOOKUP(A${r}, ${rShop}!$A:$E, 5, 0)=0), E${r}, VLOOKUP(A${r}, ${rShop}!$A:$E, 5, 0))`,
-        `=IF(F${r}=E${r}, 0, (F${r} - E${r}) / F${r})`,
-        `=IFERROR((E${r} - D${r}) / E${r}, 0)`,
-        `=IF(IFERROR(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0), 0)=0, 0, IF(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0)=1, 1, IF(PERCENTRANK.INC(FILTER(${rSales}!$D$2:$D, ${rSales}!$D$2:$D>1), VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0))>=0.80, 4, IF(PERCENTRANK.INC(FILTER(${rSales}!$D$2:$D, ${rSales}!$D$2:$D>1), VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0))>=0.55, 3, 2))))`,
-        `=IFERROR(IFS(H${r}>=0.55, 3, H${r}>=0.45, 2, H${r}>=0.35, 1, TRUE, 0), 0)`,
-        `=IF(C${r}="WEBONLY", 2, LET(sls, IFERROR(VLOOKUP(A${r}, ${rSales}!$A:$Z, 4, 0), 0), dos, IF(sls=0, 999, P${r}/(sls/90)), IFS(dos<=30, 3, dos<=120, 2, dos<=180, 1, TRUE, 0)))`,
-        `=SUM(I${r}, J${r}, K${r})`,
-        `=IFS(B${r}="New Launch", "New Launch (0% Hold)", B${r}="3rd Party MAP", "3rd Party MAP Review (0% Hold)", L${r}=10, "Top Hero (0% Off)", L${r}>=8, "Signature Hero (30% Off)", L${r}>=6, "Proven Performer (40% Off)", L${r}>=4, "Accelerator (50% Off)", TRUE, "Clearance/Archive (65% Off)")`,
-        `=IF(M${r}="Signature Hero (30% Off)", 0.30, IF(M${r}="Proven Performer (40% Off)", 0.40, IF(M${r}="Accelerator (50% Off)", 0.50, IF(M${r}="Clearance/Archive (65% Off)", 0.65, 0))))`,
-        `=IFERROR(VLOOKUP(A${r}, ${rUsa}!$A:$M, 3, 0), 0) + IFERROR(VLOOKUP(A${r}, ${rWeb}!$A:$M, 3, 0), 0)`,
-        `=IFERROR(VLOOKUP(A${r}, ${rWeb}!$A:$M, 3, 0), 0)`,
-        `=IFERROR(VLOOKUP(A${r}, ${rShop}!$A:$Z, 8, 0), 0)`,
+        `=IFS(ISNUMBER(MATCH(${sku}, ${ctrl}!$A:$A, 0)), "⚠️ Active GWP Promo", ISNUMBER(MATCH(${sku}, ${ctrl}!$B:$B, 0)), "New Launch", SUMPRODUCT(--ISNUMBER(SEARCH(${ctrl}!$C$2:$C$50, VLOOKUP(${sku}, ${rShop}!$A:$G, 7, 0)))), "3rd Party MAP", TRUE, "None")`,
+        `=IFERROR(VLOOKUP(${sku}, ${rShop}!$A:$I, 2, 0), "SHARED")`,
+        `=VLOOKUP(${sku}, ${rCost}!$A:$B, 2, 0)`,
+        `=VLOOKUP(${sku}, ${rShop}!$A:$I, 5, 0)`,
+        `=IF(OR(ISBLANK(VLOOKUP(${sku}, ${rShop}!$A:$I, 6, 0)), VLOOKUP(${sku}, ${rShop}!$A:$I, 6, 0)=0), ${COL.PRICE}${r}, VLOOKUP(${sku}, ${rShop}!$A:$I, 6, 0))`,
+        `=IF(${COL.MSRP}${r}=${COL.PRICE}${r}, 0, (${COL.MSRP}${r} - ${COL.PRICE}${r}) / ${COL.MSRP}${r})`,
+        `=IFERROR((${COL.PRICE}${r} - ${COL.COST}${r}) / ${COL.PRICE}${r}, 0)`,
+        `=IF(IFERROR(VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0), 0)=0, 0, IF(VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0)=1, 1, IF(PERCENTRANK.INC(FILTER(${rSales}!$C$2:$C, ${rSales}!$C$2:$C>1), VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0))>=0.80, 4, IF(PERCENTRANK.INC(FILTER(${rSales}!$C$2:$C, ${rSales}!$C$2:$C>1), VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0))>=0.55, 3, 2))))`,
+        `=IFERROR(IFS(${COL.MARG}${r}>=0.55, 3, ${COL.MARG}${r}>=0.45, 2, ${COL.MARG}${r}>=0.35, 1, TRUE, 0), 0)`,
+        `=IF(${COL.FULFILL}${r}="WEBONLY", 2, LET(sls, IFERROR(VLOOKUP(${sku}, ${rSales}!$A:$C, 3, 0), 0), dos, IF(sls=0, 999, ${COL.WH_WEB}${r}/(sls/90)), IFS(dos<=30, 3, dos<=120, 2, dos<=180, 1, TRUE, 0)))`,
+        `=SUM(${COL.VEL}${r}, J${r}, K${r})`,
+        `=IFS(${COL.GATE}${r}="New Launch", "New Launch (0% Hold)", ${COL.GATE}${r}="3rd Party MAP", "3rd Party MAP Review (0% Hold)", ${COL.TOTAL}${r}=10, "Top Hero (0% Off)", ${COL.TOTAL}${r}>=8, "Signature Hero (30% Off)", ${COL.TOTAL}${r}>=6, "Proven Performer (40% Off)", ${COL.TOTAL}${r}>=4, "Accelerator (50% Off)", TRUE, "Clearance/Archive (65% Off)")`,
+        `=IF(${COL.TIER}${r}="Signature Hero (30% Off)", 0.30, IF(${COL.TIER}${r}="Proven Performer (40% Off)", 0.40, IF(${COL.TIER}${r}="Accelerator (50% Off)", 0.50, IF(${COL.TIER}${r}="Clearance/Archive (65% Off)", 0.65, 0))))`,
+        `=IFERROR(VLOOKUP(${sku}, ${rUsa}!$A:$M, 3, 0), 0) + IFERROR(VLOOKUP(${sku}, ${rWeb}!$A:$M, 3, 0), 0)`,
+        `=IFERROR(VLOOKUP(${sku}, ${rWeb}!$A:$M, 3, 0), 0)`,
+        `=IFERROR(VLOOKUP(${sku}, ${rShop}!$A:$Z, 9, 0), 0)`,
         `=Q${r} - P${r}`,
         `=F${r} * (1 - N${r})`,
         `=S${r} * (1 - ${ctrl}!$E$2)`,
