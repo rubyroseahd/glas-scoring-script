@@ -26,6 +26,7 @@ const VDM_CONFIG = {
     AGING: "[05] Warehouse Aging & Alternative Liquidation Workspace", 
     COMPLIANCE: "[06] MAP Compliance & Marketplace Competitor Variance", 
     SYNC: "[07] Storefront Update & Sync Audit",
+    MASTER_LEDGER: "[09] Master Pricing & Margin Ledger",
     
     // Hidden Ingestion
     RAW_SHOPIFY: "_raw_shopify",

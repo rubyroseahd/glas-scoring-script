@@ -244,6 +244,62 @@ function buildStorefrontSyncAudit(dashRows, dIdx) {
   syncSheet.setConditionalFormatRules([rule]);
 }
 
+/**
+ * NEW: Generates the Master Pricing & Margin Ledger presentation tab.
+ */
+function generateMasterLedgerTab(dashRows, dIdx) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ledgerSheet = getOrCreateSheet(VDM_CONFIG.TABS.MASTER_LEDGER);
+  ledgerSheet.clear();
+  ledgerSheet.clearConditionalFormatRules();
+
+  const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
+  const shopifyData = shopifyRaw.getDataRange().getValues();
+  const sIdx = getHeaderMap(shopifyData[0]);
+
+  const handleMap = {};
+  shopifyData.slice(1).forEach(r => handleMap[sanitizeKey(r[sIdx["Variant SKU"]])] = r[sIdx["Handle"]]);
+
+  if (dashRows.length === 0) return;
+
+  const ledgerData = dashRows.map(r => {
+    const sku = r[dIdx["SKU Anchor Key"]];
+    const status = r[dIdx["Pricing Migration Status"]] || "";
+    const discountDepth = r[dIdx["VDM Markdown Depth %"]];
+    return [
+      sku,                                            // Col 1: SKU
+      handleMap[sku] || "",                           // Col 2: Handle
+      r[dIdx["Gatekeeper Status"]],                   // Col 3: Gatekeeper Status
+      r[dIdx["Target Strategic Tier"]],               // Col 4: Final Tier
+      status.includes("✓") ? "NO CHANGE" : "UPDATED", // Col 5: Action
+      r[dIdx["Live Storefront Price"]],               // Col 6: Old Variant Price
+      r[dIdx["Live Compare MSRP"]],                   // Col 7: Old Compare At Price
+      r[dIdx["Live Compare MSRP"]],                   // Col 8: Base Price Used
+      discountDepth,                                  // Col 9: Final Discount %
+      r[dIdx["New Proposed Storefront Price"]],       // Col 10: New Variant Price
+      discountDepth > 0 ? r[dIdx["Live Compare MSRP"]] : "", // Col 11: New Compare At Price
+      r[dIdx["Simulated Checkout Net Price"]],        // Col 12: Simulated Checkout Net Price
+      r[dIdx["Resolved Cost Base"]],                  // Col 13: Resolved Cost Base
+      r[dIdx["Final Simulated Stacked Margin %"]],    // Col 14: Final Stacked Margin %
+      r[dIdx["Profit Guardrail Status Alert"]]        // Col 15: Guardrail Alert
+    ];
+  });
+
+  const headers = [["SKU", "Handle", "Gatekeeper Status", "Final Tier", "Action", "Old Variant Price", "Old Compare At Price", "Base Price Used", "Final Discount %", "New Variant Price", "New Compare At Price", "Simulated Checkout Net Price", "Resolved Cost Base", "Final Stacked Margin %", "Guardrail Alert"]];
+  ledgerSheet.getRange(1, 1, 1, 15).setValues(headers);
+  applyHeaderStyle(ledgerSheet.getRange(1, 1, 1, 15));
+  ledgerSheet.getRange(2, 1, ledgerData.length, 15).setValues(ledgerData);
+
+  const range = ledgerSheet.getRange(2, 1, ledgerData.length, 15);
+  const rule = SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=$O2="❌ BLOCKED"')
+    .setBackground(VDM_CONFIG.DESIGN.ALERT_BREACH_BG)
+    .setFontColor(VDM_CONFIG.DESIGN.ALERT_BREACH_TEXT)
+    .setRanges([range])
+    .build();
+  ledgerSheet.setConditionalFormatRules([rule]);
+}
+
 function runFullRefreshCycle() {
   const ui = SpreadsheetApp.getUi();
   try {
@@ -274,6 +330,7 @@ function runFullRefreshCycle() {
     generateSupplierScorecard(rows, vendorMap);
     generateWarehouseAgingReport(rows);
     generateMAPComplianceReport(rows);
+    generateMasterLedgerTab(rows, dIdx);
 
     ui.alert("VDM v2.2 Refresh Cycle Complete. Strategic Tiers Updated.");
   } catch (e) {

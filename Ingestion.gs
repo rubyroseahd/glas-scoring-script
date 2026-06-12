@@ -40,14 +40,14 @@ function processShopifyFile(folder) {
     const status = (row[sIdx["Status"]] || "").toLowerCase();
     
     if (sku && status === "active" && !processedMap.has(sku)) {
-      processedMap.set(sku, row);
+      processedMap.set(sku, [sku, ...row]); // Prepend SKU Anchor
     }
   }
   
-  const output = [headers, ...Array.from(processedMap.values())];
+  const output = [["SKU_ANCHOR", ...headers], ...Array.from(processedMap.values())];
   const sheet = getOrCreateSheet(VDM_CONFIG.TABS.RAW_SHOPIFY, true);
   sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange(1, sIdx["Variant SKU"] + 1, output.length, 1).setNumberFormat("@"); // Apply to specific SKU column
+  sheet.getRange(1, 1, output.length, 1).setNumberFormat("@"); // Format Anchor Column
 }
 
 function processEEIFile(folder, fileName, tabName) {
@@ -67,14 +67,14 @@ function processEEIFile(folder, fileName, tabName) {
   const eeiIdx = getHeaderMap(headers);
   
   const rows = csvData.slice(5).map(row => {
-    row[eeiIdx["Item Code"]] = sanitizeKey(row[eeiIdx["Item Code"]]);
-    return row;
+    const sku = sanitizeKey(row[eeiIdx["Item Code"]]);
+    return [sku, ...row]; // Prepend SKU Anchor
   });
   
-  const output = [headers, ...rows];
+  const output = [["SKU_ANCHOR", ...headers], ...rows];
   const sheet = getOrCreateSheet(tabName, true);
   sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
-  sheet.getRange(1, eeiIdx["Item Code"] + 1, output.length, 1).setNumberFormat("@");
+  sheet.getRange(1, 1, output.length, 1).setNumberFormat("@");
 }
 
 function processGenericCSV(folder, fileName, tabName) {
@@ -85,15 +85,18 @@ function processGenericCSV(folder, fileName, tabName) {
   }
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  const sheet = getOrCreateSheet(tabName, true);
-  sheet.clear().getRange(1, 1, data.length, data[0].length).setValues(data);
-
-  // Assuming the first column is the SKU for generic CSVs if not specified
   const headers = data[0];
-  const skuColIdx = headers.findIndex(h => h.toLowerCase().includes("sku")); // Best guess
-  if (skuColIdx !== -1) {
-    sheet.getRange(1, skuColIdx + 1, data.length, 1).setNumberFormat("@");
-  }
+  const skuColIdx = headers.findIndex(h => h.toLowerCase().includes("sku") || h === "Product variant SKU");
+  
+  const rows = data.slice(1).map(row => {
+    const sku = sanitizeKey(row[skuColIdx]);
+    return [sku, ...row];
+  });
+  
+  const output = [["SKU_ANCHOR", ...headers], ...rows];
+  const sheet = getOrCreateSheet(tabName, true);
+  sheet.clear().getRange(1, 1, output.length, output[0].length).setValues(output);
+  sheet.getRange(1, 1, output.length, 1).setNumberFormat("@");
 }
 
 function resolveCostHierarchy() {
@@ -110,9 +113,9 @@ function resolveCostHierarchy() {
   const costLookup = {};
   costData.slice(1).forEach(r => {
     costLookup[sanitizeKey(r[cIdx["SKU"]])] = {
-      eei: parseFloat(r[cIdx["EEI Last Purchase Price"]]) || 0,
+      eei: parseFloat(r[cIdx["EEI LAST PURCHASE PRICE"]]) || 0,
       glas: parseFloat(r[cIdx["GLAS Costing"]]) || 0,
-      cotr: parseFloat(r[cIdx["COTR Last Purchase Price"]]) || 0
+      cotr: parseFloat(r[cIdx["COTR LAST PURCHASE PRICE"]]) || 0
     };
   });
   
