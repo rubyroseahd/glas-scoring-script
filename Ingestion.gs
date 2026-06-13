@@ -52,11 +52,6 @@ function validateHeaders(folder) {
   });
 }
 
-function sanitize(val) {
-  if (val === null || val === undefined) return "";
-  return String(val).trim().toUpperCase().replace(/[\r\n\t]+/g, "");
-}
-
 function ingestShopify(folder, ss) {
   const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SHOPIFY);
   if (!files.hasNext()) throw new Error("Shopify file missing");
