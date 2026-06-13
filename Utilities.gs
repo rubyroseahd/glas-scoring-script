@@ -37,11 +37,20 @@ function sanitizeKey(key) {
  * @return {number}
  */
 function safeNum(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === 'number') return isNaN(value) ? null : value;
   const cleanValue = value.toString().replace(/[$,\s]/g, "");
   const num = parseFloat(cleanValue);
-  return isNaN(num) ? 0 : num;
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Ensures calculations only proceed if values are numbers and not null.
+ * @param {...any} values
+ * @return {boolean}
+ */
+function mathGuard(...values) {
+  return values.every(v => typeof v === 'number' && v !== null && !isNaN(v));
 }
 
 /**
@@ -61,13 +70,14 @@ function safeStr(value) {
  * @return {Object}
  */
 function getHeaderMap(headers) {
-  return headers.reduce((acc, header, index) => {
+  const map = headers.reduce((acc, header, index) => {
     if (header !== null && header !== undefined && header.toString().trim() !== "") { // Ensure header is not empty
       // Enforce uppercase keys for case-insensitive lookup robustness
       acc[header.toString().trim().toUpperCase()] = index;
     }
     return acc;
   }, {});
+  return map;
 }
 
 /**

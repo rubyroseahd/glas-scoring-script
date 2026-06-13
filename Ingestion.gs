@@ -7,18 +7,49 @@ function runDataIngestion() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
     
+    // Pre-Flight Header Check
+    validateHeaders(folder);
+
     // Pass spreadsheet object to avoid repeated calls
     ingestShopify(folder, ss);
-    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA);
-    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB);
-    ingestSalesCSV(folder);
-    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST, "SKU");
+    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA, ss);
+    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB, ss);
+    ingestSalesCSV(folder, ss);
+    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST, "SKU", ss);
     
     executeCostResolutionWaterfall();
   } catch (e) {
     logError("Ingestion", e);
     throw e;
   }
+}
+
+/**
+ * Validates that all required headers exist in source CSVs before processing.
+ * @param {GoogleAppsScript.Drive.Folder} folder
+ */
+function validateHeaders(folder) {
+  const configs = [
+    { file: VDM_CONFIG.SOURCE_FILES.SHOPIFY, headers: VDM_CONFIG.HEADERS.SHOPIFY, skip: 0 },
+    { file: VDM_CONFIG.SOURCE_FILES.EEI_USA, headers: VDM_CONFIG.HEADERS.USA_WAREHOUSE, skip: 4 },
+    { file: VDM_CONFIG.SOURCE_FILES.EEI_WEB, headers: VDM_CONFIG.HEADERS.WEB_WAREHOUSE, skip: 4 },
+    { file: VDM_CONFIG.SOURCE_FILES.SALES, headers: VDM_CONFIG.HEADERS.RETAIL_VELOCITY, skip: 0 },
+    { file: VDM_CONFIG.SOURCE_FILES.COST, headers: VDM_CONFIG.HEADERS.COST_WATERFALL, skip: 0 }
+  ];
+
+  configs.forEach(cfg => {
+    const files = folder.getFilesByName(cfg.file);
+    if (!files.hasNext()) throw new Error(`Missing required file: ${cfg.file}`);
+    const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
+    if (!data || data.length <= cfg.skip) throw new Error(`File ${cfg.file} is empty or malformed.`);
+    
+    const fileHeaders = data[cfg.skip].map(h => h.toString().trim().toUpperCase());
+    cfg.headers.forEach(req => {
+      if (!fileHeaders.includes(req.toUpperCase())) {
+        throw new Error(`File "${cfg.file}" is missing required column: "${req}"`);
+      }
+    });
+  });
 }
 
 function sanitize(val) {
@@ -37,8 +68,8 @@ function ingestShopify(folder, ss) {
   const map = new Map();
   for (var i = 1; i < data.length; i++) {
     const row = data[i];
-    const sku = safeStr(row[hMap["Variant SKU"]]).toUpperCase();
-    const status = safeStr(row[hMap["Status"]]).toLowerCase();
+    const sku = safeStr(row[hMap[VDM_CONFIG.HEADERS.SHOPIFY[0]]]).toUpperCase();
+    const status = safeStr(row[hMap[VDM_CONFIG.HEADERS.SHOPIFY[2]]]).toLowerCase();
     
     if (sku && status === "active" && !map.has(sku)) {
       // Map row to the exact sequence in outHeaders
@@ -55,7 +86,7 @@ function ingestShopify(folder, ss) {
   writeToHiddenTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [outHeaders, ...Array.from(map.values())], ss);
 }
 
-function ingestEEI(folder, fileName, tabName) {
+function ingestEEI(folder, fileName, tabName, ss) {
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) throw new Error(`${fileName} missing`);
   
@@ -65,7 +96,7 @@ function ingestEEI(folder, fileName, tabName) {
   const targetHeaders = tabName === VDM_CONFIG.TABS.RAW_EEI_USA ? VDM_CONFIG.HEADERS.USA_WAREHOUSE : VDM_CONFIG.HEADERS.WEB_WAREHOUSE;
   
   const rows = data.slice(5).map(r => {
-    const sku = safeStr(r[hMap["Item Code"]]).toUpperCase();
+    const sku = safeStr(r[hMap[targetHeaders[0]]]).toUpperCase();
     const out = [sku];
     targetHeaders.forEach(h => {
       const val = r[hMap[h]];
@@ -77,7 +108,7 @@ function ingestEEI(folder, fileName, tabName) {
   writeToHiddenTab(tabName, [["SKU_ANCHOR", ...targetHeaders], ...rows], ss);
 }
 
-function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
+function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const files = folder.getFilesByName(fileName);
   if (!files.hasNext()) throw new Error(`${fileName} missing`);
   
@@ -99,16 +130,16 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader) {
  * Dedicated Sales Ingestion to maintain strict 3-column contract: [SKU_ANCHOR, SKU, Net items sold]
  * Prevents downstream VLOOKUP index corruption.
  */
-function ingestSalesCSV(folder) {
+function ingestSalesCSV(folder, ss) {
   const files = folder.getFilesByName(VDM_CONFIG.SOURCE_FILES.SALES);
   if (!files.hasNext()) throw new Error("Sales file missing");
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
   const hIdx = getHeaderMap(data[0]);
-  const salesCol = hIdx["Net items sold"];
+  const salesCol = hIdx[VDM_CONFIG.HEADERS.RETAIL_VELOCITY[1]];
   
   const rows = data.slice(1).map(r => {
-    const sku = safeStr(r[hIdx["Product variant SKU"]]).toUpperCase();
+    const sku = safeStr(r[hIdx[VDM_CONFIG.HEADERS.RETAIL_VELOCITY[0]]]).toUpperCase();
     return [sku, sku, safeNum(r[salesCol])];
   }).filter(r => r[0] !== "");
 
@@ -121,15 +152,15 @@ function executeCostResolutionWaterfall() {
   const shopifyData = shopifySheet.getDataRange().getValues();
   const costData = ss.getSheetByName(VDM_CONFIG.TABS.RAW_COST).getDataRange().getValues();
   
-  const shopifyHeaders = shopifyData[0];
-  const costHeaders = costData[0];
+  const sIdxMap = getHeaderMap(shopifyData[0]);
+  const cIdxMap = getHeaderMap(costData[0]);
   
-  const sIdx = { cost: shopifyHeaders.indexOf("Cost per item") };
+  const sIdx = { cost: sIdxMap["COST PER ITEM"] };
   const cIdx = {
-    sku: costHeaders.indexOf("SKU"),
-    eei: costHeaders.indexOf("EEI LAST PURCHASE PRICE"),
-    glas: costHeaders.indexOf("GLAS Costing"),
-    cotr: costHeaders.indexOf("COTR LAST PURCHASE PRICE")
+    sku: cIdxMap["SKU_ANCHOR"],
+    eei: cIdxMap["EEI LAST PURCHASE PRICE"],
+    glas: cIdxMap["GLAS COSTING"],
+    cotr: cIdxMap["COTR LAST PURCHASE PRICE"]
   };
 
   const costMap = new Map();

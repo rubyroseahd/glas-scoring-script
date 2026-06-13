@@ -2,25 +2,22 @@
  * MODULE 4: ANALYTICS REPORTING
  */
 
-function generateAllReports() {
+function generateAllReports(dashboardState) {
   try {
+    if (!dashboardState || !dashboardState.rows) throw new Error("Dashboard state missing for reporting.");
+    const { rows, headers } = dashboardState;
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const dash = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
-    const data = dash.getDataRange().getValues();
-    const headers = data[0];
-    const rows = data.slice(1).filter(r => r[0] !== ""); // Filter out empty rows
-    if (rows.length === 0) throw new Error("No data found in Dashboard Matrix.");
-    
     // Load Shopify Memory Map for Handle and Vendor lookups
     const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
     const sRawIdx = getHeaderMap(shopifyRaw[0]); // Dynamic index mapping
     const shopifyMap = new Map(shopifyRaw.slice(1).map(r => {
       // Map SKU Anchor to Handle and Vendor metadata safely
-      return [r[0], { handle: r[sRawIdx["Handle"]], vendor: r[sRawIdx["Vendor"]] }];
+
+      return [r[0], { handle: r[sRawIdx["HANDLE"]], vendor: r[sRawIdx["VENDOR"]] }];
     }));
 
-    const idx = {};
-    headers.forEach((h, i) => idx[h] = i);
+    const idx = getHeaderMap(headers); // Use the standardized helper for Dashboard columns
 
     generateSummaryTab(rows, idx, shopifyMap);
     generateSyncAudit(rows, idx, shopifyMap);
@@ -42,11 +39,11 @@ function generateSummaryTab(rows, idx, shopifyMap) {
   const tiers = ["Top Hero", "Signature Hero", "Proven Performer", "Accelerator", "Clearance", "New Launch", "Archive"];
   
   rows.forEach(r => {
-    const from = r[idx["Current Equivalent Storefront Tier"]];
-    const to = r[idx["Target Strategic Tier"]];
+    const from = r[idx["CURRENT EQUIVALENT STOREFRONT TIER"]];
+    const to = r[idx["TARGET STRATEGIC TIER"]];
     if (!from || !to) return;
 
-    const cost = parseFloat(r[idx["Resolved Cost Base"]]) || 0;
+    const cost = parseFloat(r[idx["RESOLVED COST BASE"]]) || 0;
     // Extract clean name (remove % Off text) for the key, ensuring it's a string
     const cleanTo = to.split(" (")[0];
     const key = `${from} -> ${cleanTo}`;
@@ -65,7 +62,7 @@ function generateSummaryTab(rows, idx, shopifyMap) {
 
   // Block 2: House Brands
   const houseRows = rows.filter(r => {
-    const sku = r[idx["SKU Anchor Key"]];
+    const sku = r[idx["SKU ANCHOR KEY"]];
     const vendorName = (shopifyMap.get(sku)?.vendor || "").toUpperCase();
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
@@ -73,7 +70,7 @@ function generateSummaryTab(rows, idx, shopifyMap) {
   // Block 2: House Brand Strategic Distribution
   const houseTiers = {};
   houseRows.forEach(hr => {
-    const tier = hr[idx["Target Strategic Tier"]].split(" (")[0];
+    const tier = hr[idx["TARGET STRATEGIC TIER"]].split(" (")[0];
     houseTiers[tier] = (houseTiers[tier] || 0) + 1;
   });
 
@@ -96,24 +93,24 @@ function generateSyncAudit(rows, idx, shopifyMap) {
   const headers = ["SKU", "Handle", "Action", "Final Tier", "Final Discount", "Old Variant Price", "Old Compare At Price", "Base Price Used", "New Variant Price", "New Compare At Price", "Note"];
 
   const syncRows = rows.map(r => {
-    const sku = r[idx["SKU Anchor Key"]];
-    const mkdn = parseFloat(r[idx["VDM Markdown Depth %"]]) || 0;
+    const sku = r[idx["SKU ANCHOR KEY"]];
+    const mkdn = parseFloat(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     
     // Terminology Alignment (Manual Section 4.4): Standardize Action keywords
-    const status = r[idx["Pricing Migration Status"]];
+    const status = r[idx["PRICING MIGRATION STATUS"]];
     const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable") ? "NO CHANGE" : "UPDATED";
 
     return [
       sku,
       shopifyMap.get(sku)?.handle || "",
       action,
-      r[idx["Target Strategic Tier"]],
+      r[idx["TARGET STRATEGIC TIER"]],
       mkdn,
-      r[idx["Live Storefront Price"]],
-      r[idx["Live Compare MSRP"]],
-      r[idx["Live Compare MSRP"]],
-      r[idx["New Proposed Storefront Price"]],
-      mkdn === 0 ? "" : r[idx["Live Compare MSRP"]],
+      r[idx["LIVE STOREFRONT PRICE"]],
+      r[idx["LIVE COMPARE MSRP"]],
+      r[idx["LIVE COMPARE MSRP"]],
+      r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+      mkdn === 0 ? "" : r[idx["LIVE COMPARE MSRP"]],
       ""
     ];
   });
@@ -133,24 +130,24 @@ function generateMasterLedger(rows, idx, shopifyMap) {
   const headers = ["SKU", "Handle", "Gatekeeper Status", "Final Tier", "Action", "Old Variant Price", "Old Compare At Price", "Base Price Used", "Final Discount %", "New Variant Price", "New Compare At Price", "Simulated Checkout Net Price", "Resolved Cost Base", "Final Stacked Margin %", "Guardrail Alert"];
   
   const ledgerRows = rows.map(r => {
-    const sku = r[idx["SKU Anchor Key"]];
-    const mkdn = parseFloat(r[idx["VDM Markdown Depth %"]]) || 0;
+    const sku = r[idx["SKU ANCHOR KEY"]];
+    const mkdn = parseFloat(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     return [
       sku,
       shopifyMap.get(sku)?.handle || "",
-      r[idx["Gatekeeper Status"]],
-      r[idx["Target Strategic Tier"]],
-      r[idx["Pricing Migration Status"]],
-      r[idx["Live Storefront Price"]],
-      r[idx["Live Compare MSRP"]],
-      r[idx["Live Compare MSRP"]],
+      r[idx["GATEKEEPER STATUS"]],
+      r[idx["TARGET STRATEGIC TIER"]],
+      r[idx["PRICING MIGRATION STATUS"]],
+      r[idx["LIVE STOREFRONT PRICE"]],
+      r[idx["LIVE COMPARE MSRP"]],
+      r[idx["LIVE COMPARE MSRP"]],
       mkdn,
-      r[idx["New Proposed Storefront Price"]],
-      mkdn === 0 ? "" : r[idx["Live Compare MSRP"]],
-      r[idx["Simulated Checkout Net Price"]],
-      r[idx["Resolved Cost Base"]],
-      r[idx["Final Simulated Stacked Margin %"]],
-      r[idx["Profit Guardrail Status Alert"]]
+      r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+      mkdn === 0 ? "" : r[idx["LIVE COMPARE MSRP"]],
+      r[idx["SIMULATED CHECKOUT NET PRICE"]],
+      r[idx["RESOLVED COST BASE"]],
+      r[idx["FINAL SIMULATED STACKED MARGIN %"]],
+      r[idx["PROFIT GUARDRAIL STATUS ALERT"]]
     ];
   });
 
@@ -168,10 +165,10 @@ function generateSupplierScorecard(rows, idx, shopifyMap) {
 
   const vendorTotals = {};
   rows.forEach(r => {
-    const sku = r[idx["SKU Anchor Key"]];
+    const sku = r[idx["SKU ANCHOR KEY"]];
     const vendor = shopifyMap.get(sku)?.vendor || "Unknown Vendor";
-    const stockVal = (parseFloat(r[idx["Total On-Hand Warehouse Stock"]]) || 0) * (parseFloat(r[idx["Resolved Cost Base"]]) || 0);
-    const units90 = parseFloat(r[idx["Retail Velocity Score Component"]]) || 0; // This is still the score, not raw units.
+    const stockVal = (parseFloat(r[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (parseFloat(r[idx["RESOLVED COST BASE"]]) || 0);
+    const units90 = parseFloat(r[idx["RETAIL VELOCITY SCORE COMPONENT"]]) || 0; // This is still the score, not raw units.
 
     if (!vendorTotals[vendor]) vendorTotals[vendor] = { skus: 0, stockValue: 0, sales90: 0 };
     vendorTotals[vendor].skus++;
@@ -197,10 +194,10 @@ function logElasticitySnapshot(rows, idx) {
   
   const snapshot = rows.map(r => [
     date,
-    r[idx["SKU Anchor Key"]],
-    r[idx["VDM Markdown Depth %"]],
-    r[idx["Simulated Checkout Net Price"]],
-    r[idx["Retail Velocity Score Component"]]
+    r[idx["SKU ANCHOR KEY"]],
+    r[idx["VDM MARKDOWN DEPTH %"]],
+    r[idx["SIMULATED CHECKOUT NET PRICE"]],
+    r[idx["RETAIL VELOCITY SCORE COMPONENT"]]
   ]);
   
   if (sheet.getLastRow() === 0) {
@@ -217,8 +214,8 @@ function executeFlexibleRefreshProcess() {
   try {
     ui.showModelessDialog(HtmlService.createHtmlOutput("<b>Processing VDM Refresh...</b>"), "System Status");
     runDataIngestion();
-    executeDashboardRefresh();
-    generateAllReports();
+    const dashboardState = executeDashboardRefresh();
+    generateAllReports(dashboardState);
     ui.alert("VDM Refresh Complete.");
   } catch (e) {
     ui.alert("Process Failed: " + e.message);

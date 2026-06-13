@@ -21,24 +21,24 @@ function executeDashboardRefresh() {
     const wIdx = webData.length > 0 ? getHeaderMap(webData[0]) : {};
     const cIdx = costData.length > 0 ? getHeaderMap(costData[0]) : {};
 
-    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]), safeNum(r[vIdx["Net items sold"]])]));
+    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]), safeNum(r[vIdx["NET ITEMS SOLD"]])]));
     const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]), r]));
-    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]), safeNum(r[wIdx["EEI Web Warehouse On Hand Stock"]])]));
-    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]), safeNum(r[cIdx["Resolved Cost"]])]));
+    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]), safeNum(r[wIdx["EEI WEB WAREHOUSE ON HAND STOCK"]])]));
+    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]), safeNum(r[cIdx["RESOLVED COST"]])]));
     
     // Load Registries
     const gwpSet = new Set(settingsData.slice(1).map(r => safeStr(r[0]).toUpperCase())); // Skip header row
     const launchSet = new Set(settingsData.slice(1).map(r => safeStr(r[1]).toUpperCase())); // Skip header row
     const mapBrands = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v); // Skip header row
-    const affiliateRate = settingsData.length > 1 ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
+    const affiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
 
     // Velocity Percentile Setup
-    const salesArray = Array.from(salesMap.values()).filter(v => v > 1).sort((a,b) => a-b);
+    const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
 
     const results = [];
     shopifyData.slice(1).forEach(row => {
       const sku = row[0];
-      const vendor = safeStr(row[sIdx["Vendor"]]).toUpperCase(); // Ensure vendor is always a string
+      const vendor = safeStr(row[sIdx["VENDOR"]]).toUpperCase();
       
       // A: SKU Anchor
       // B: Gatekeeper
@@ -47,25 +47,28 @@ function executeDashboardRefresh() {
       else if (launchSet.has(sku)) gate = "New Launch";
       else if (mapBrands.some(b => vendor.includes(b))) gate = "3rd Party MAP";
 
-      const fulfillment = safeStr(row[sIdx["Fulfillment service"]]) || "SHARED";
+      const fulfillment = safeStr(row[sIdx["FULFILLMENT SERVICE"]]) || "SHARED";
       const cost = safeNum(costMap.get(sku));
-      const price = safeNum(row[sIdx["Variant Price"]]);
-      const rawCompare = safeNum(row[sIdx["Variant Compare At Price"]]);
-      const compareMSRP = (rawCompare === 0 || isNaN(rawCompare)) ? price : rawCompare;
-      const curMarkdown = compareMSRP === price ? 0 : (compareMSRP - price) / compareMSRP;
-      const curMargin = price === 0 ? 0 : (price - cost) / price;
+      const price = safeNum(row[sIdx["VARIANT PRICE"]]);
+      const rawCompare = safeNum(row[sIdx["VARIANT COMPARE AT PRICE"]]);
+      
+      const compareMSRP = (rawCompare === 0 || rawCompare === null) ? (price || 0) : rawCompare;
+      const curMarkdown = (compareMSRP === price || compareMSRP === 0) ? 0 : (compareMSRP - (price || 0)) / compareMSRP;
+      const curMargin = (price === 0 || price === null || cost === null) ? 0 : (price - cost) / price;
       
       // Velocity Score (I) - Ensure sIdx["Net items sold"] is valid
       const units90 = safeNum(salesMap.get(sku));
       let vScore = 0;
-      if (units90 === 1) {
-        vScore = 1;
-      } else if (units90 > 1) {
-        const den = salesArray.length - 1;
-        const rank = den > 0 ? salesArray.filter(v => v < units90).length / den : 0;
-        if (rank >= 0.80) vScore = 4;
-        else if (rank >= 0.55) vScore = 3;
-        else vScore = 2;
+      if (units90 !== null) {
+        if (units90 === 1) {
+          vScore = 1;
+        } else if (units90 > 1) {
+          const den = salesArray.length - 1;
+          const rank = den > 0 ? salesArray.filter(v => v < units90).length / den : 0;
+          if (rank >= 0.80) vScore = 4;
+          else if (rank >= 0.55) vScore = 3;
+          else vScore = 2;
+        }
       }
 
       // Margin Score (J)
@@ -80,7 +83,7 @@ function executeDashboardRefresh() {
       if (fulfillment === "WEBONLY") {
         sScore = 2;
       } else {
-        const dailyVelocity = safeNum(units90 / 90);
+        const dailyVelocity = (units90 || 0) / 90;
         const dos = dailyVelocity > 0 ? webStock / dailyVelocity : 999;
         if (dos <= 30) sScore = 3;
         else if (dos <= 120) sScore = 2;
@@ -100,18 +103,26 @@ function executeDashboardRefresh() {
       else if (totalScore >= 4) { tier = "Accelerator (50% Off)"; vdmMarkdown = 0.50; }
 
       const usaRow = usaMap.get(sku);
-      const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA Warehouse On Hand Stock"]]) : 0;
+      const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA WAREHOUSE ON HAND STOCK"]]) || 0 : 0;
       const totalStock = usaStock + webStock;
-      const shopifyQty = safeNum(row[sIdx["Variant Inventory Qty"]]);
+      const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
       const propPrice = compareMSRP * (1 - vdmMarkdown);
       const simNet = propPrice * (1 - affiliateRate);
-      const stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
-      const guardrail = stackMargin < 0.20 ? "❌ BLOCKED" : "✓ SAFE";
+      
+      let stackMargin = 0;
+      let guardrail = "✓ SAFE";
+
+      if (cost === null) {
+        guardrail = "DATA_ERROR";
+      } else if (mathGuard(simNet, cost)) {
+        stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
+        if (stackMargin < 0.20) guardrail = "❌ BLOCKED";
+      }
       
       const curTierLabel = curMarkdown === 0 ? "Full MSRP" : (curMarkdown <= 0.19 ? "Promo Tier 1 (10-15%)" : (curMarkdown <= 0.35 ? "Promo Tier 2 (20-25%)" : (curMarkdown <= 0.55 ? "Promo Tier 3 (40-50%)" : "Clearance")));
       
       // X: Governance Override
-      const b2b30DSales = usaRow ? safeNum(usaRow[uIdx["Sales Past 30 Days"]]) : 0;
+      const b2b30DSales = usaRow ? safeNum(usaRow[uIdx["SALES PAST 30 DAYS"]]) || 0 : 0;
       let migration = (vdmMarkdown > curMarkdown) ? "🚨 Deepen Discount" : "📈 Price Recovery/Lift";
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
       if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= 500 && b2b30DSales > 0) {
@@ -119,13 +130,13 @@ function executeDashboardRefresh() {
       }
 
       results.push([
-        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - price, stackMargin - curMargin
+        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin
       ]);
     });
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
-    const headers = [
+    const dashboardHeaders = [
       "SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price",
       "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Retail Velocity Score Component",
       "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier",
@@ -136,7 +147,7 @@ function executeDashboardRefresh() {
     ];
     
     const headerRange = dashSheet.getRange(1, 1, 1, 26);
-    headerRange.setValues([headers]);
+    headerRange.setValues([dashboardHeaders]);
     applyHeaderStyle(headerRange);
     if (results.length > 0 && results[0].length > 0) { // Ensure results array is not empty and has columns
       dashSheet.getRange(2, 1, results.length, 26).setValues(results);
@@ -145,8 +156,11 @@ function executeDashboardRefresh() {
     
     applyConditionalFormatting(dashSheet, results.length);
     dashSheet.setFrozenRows(1);
+
+    return { rows: results, headers: dashboardHeaders };
   } catch (e) {
     logError("MatrixEngine", e);
+    throw e;
   }
 }
 

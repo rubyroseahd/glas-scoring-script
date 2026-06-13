@@ -52,11 +52,11 @@ const VDM_CONFIG = {
 
   // Header String Registry for dynamic matching
   HEADERS: {
-    SHOPIFY: ["Variant SKU", "Handle", "Status", "Variant Price", "Variant Compare At Price", "Fulfillment service", "Vendor", "Variant Inventory Qty", "Cost per item"],
-    USA_WAREHOUSE: ["Item Code", "EEI USA Warehouse On Hand Stock", "Sales Past 30 Days"],
-    WEB_WAREHOUSE: ["Item Code", "EEI Web Warehouse On Hand Stock", "Sales Past 30 days"], // Corrected case for 'days'
-    RETAIL_VELOCITY: ["Product variant SKU", "Net items sold"],
-    COST_WATERFALL: ["SKU", "EEI LAST PURCHASE PRICE", "GLAS Costing", "COTR LAST PURCHASE PRICE"]
+    SHOPIFY: ["VARIANT SKU", "HANDLE", "STATUS", "VARIANT PRICE", "VARIANT COMPARE AT PRICE", "FULFILLMENT SERVICE", "VENDOR", "VARIANT INVENTORY QTY", "COST PER ITEM"],
+    USA_WAREHOUSE: ["ITEM CODE", "EEI USA WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
+    WEB_WAREHOUSE: ["ITEM CODE", "EEI WEB WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
+    RETAIL_VELOCITY: ["PRODUCT VARIANT SKU", "NET ITEMS SOLD"],
+    COST_WATERFALL: ["SKU", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE"]
   }
 };
 
