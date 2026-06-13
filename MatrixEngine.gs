@@ -47,7 +47,7 @@ function executeDashboardRefresh() {
       else if (launchSet.has(sku)) gate = "New Launch";
       else if (mapBrands.some(b => vendor.includes(b))) gate = "3rd Party MAP";
 
-      const fulfillment = safeStr(row[sIdx["FULFILLMENT SERVICE"]]) || "SHARED";
+      const fulfillment = usaMap.has(sku) ? "SHARED" : "WEBONLY";
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx["VARIANT PRICE"]]);
       const rawCompare = safeNum(row[sIdx["VARIANT COMPARE AT PRICE"]]);

@@ -68,13 +68,17 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
 
+  // Fetch the exact global affiliate rate from your Settings tab so it applies universally
+  const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS).getDataRange().getValues();
+  const globalAffiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15;
+
   // Block 2: House Brand Strategic Distribution
   const houseTiers = {};
   const totalHouseSKUs = houseRows.length;
-  const houseAffiliateRate = 0.25; // Standard house brand affiliate assumption
 
   houseRows.forEach(hr => {
     const tierRaw = hr[idx["TARGET STRATEGIC TIER"]];
+    if (!tierRaw) return;
     const tier = tierRaw.split(" (")[0];
     const mkdn = safeNum(hr[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     const fulfillment = hr[idx["FULFILLMENT TAG"]];
@@ -93,7 +97,8 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   Object.keys(houseTiers).forEach(t => {
     const d = houseTiers[t];
     const pctOfTotal = totalHouseSKUs > 0 ? (d.count / totalHouseSKUs) : 0;
-    const finalStacked = 1 - ((1 - d.baseDiscount) * (1 - houseAffiliateRate));
+    // Mathematically compound the base discount with the global affiliate rate
+    const finalStacked = 1 - ((1 - d.baseDiscount) * (1 - globalAffiliateRate));
     
     houseOut.push([
       t, 
@@ -102,7 +107,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
       d.webOnly, 
       pctOfTotal, 
       d.baseDiscount, 
-      houseAffiliateRate, 
+      globalAffiliateRate, 
       finalStacked
     ]);
   });
@@ -112,7 +117,6 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   if (houseOut.length > 1) {
     sheet.getRange(startRow, 1, houseOut.length, 8).setValues(houseOut);
     applyHeaderStyle(sheet.getRange(startRow, 1, 1, 8));
-    // Format percentages
     sheet.getRange(startRow + 1, 5, houseOut.length - 1, 1).setNumberFormat("0.00%");
     sheet.getRange(startRow + 1, 6, houseOut.length - 1, 3).setNumberFormat("0.00%");
   }
