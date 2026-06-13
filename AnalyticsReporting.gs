@@ -8,29 +8,30 @@ function generateAllReports(dashboardState) {
     const { rows, headers } = dashboardState;
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const rawShopifySheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
+    if (!rawShopifySheet) throw new Error("Shopify raw data missing.");
+
     // Load Shopify Memory Map for Handle and Vendor lookups
-    const shopifyRaw = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY).getDataRange().getValues();
+    const shopifyRaw = rawShopifySheet.getDataRange().getValues();
     const sRawIdx = getHeaderMap(shopifyRaw[0]); // Dynamic index mapping
     const shopifyMap = new Map(shopifyRaw.slice(1).map(r => {
       // Map SKU Anchor to Handle and Vendor metadata safely
-
       return [r[0], { handle: r[sRawIdx["HANDLE"]], vendor: r[sRawIdx["VENDOR"]] }];
     }));
 
     const idx = getHeaderMap(headers); // Use the standardized helper for Dashboard columns
 
-    generateSummaryTab(rows, idx, shopifyMap);
-    generateSyncAudit(rows, idx, shopifyMap);
-    generateMasterLedger(rows, idx, shopifyMap);
-    generateSupplierScorecard(rows, idx, shopifyMap);
-    logElasticitySnapshot(rows, idx);
+    generateSummaryTab(ss, rows, idx, shopifyMap);
+    generateSyncAudit(ss, rows, idx, shopifyMap);
+    generateMasterLedger(ss, rows, idx, shopifyMap);
+    generateSupplierScorecard(ss, rows, idx, shopifyMap);
+    logElasticitySnapshot(ss, rows, idx);
   } catch (e) {
     logError("Reporting", e);
   }
 }
 
-function generateSummaryTab(rows, idx, shopifyMap) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SUMMARY);
   sheet.clear().clearFormats();
 
@@ -42,8 +43,8 @@ function generateSummaryTab(rows, idx, shopifyMap) {
     const from = r[idx["CURRENT EQUIVALENT STOREFRONT TIER"]];
     const to = r[idx["TARGET STRATEGIC TIER"]];
     if (!from || !to) return;
-
-    const cost = parseFloat(r[idx["RESOLVED COST BASE"]]) || 0;
+    
+    const cost = safeNum(r[idx["RESOLVED COST BASE"]]) || 0;
     // Extract clean name (remove % Off text) for the key, ensuring it's a string
     const cleanTo = to.split(" (")[0];
     const key = `${from} -> ${cleanTo}`;
@@ -85,8 +86,7 @@ function generateSummaryTab(rows, idx, shopifyMap) {
   }
 }
 
-function generateSyncAudit(rows, idx, shopifyMap) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function generateSyncAudit(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SYNC_AUDIT);
   sheet.clear().clearFormats();
 
@@ -94,7 +94,7 @@ function generateSyncAudit(rows, idx, shopifyMap) {
 
   const syncRows = rows.map(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
-    const mkdn = parseFloat(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
+    const mkdn = safeNum(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     
     // Terminology Alignment (Manual Section 4.4): Standardize Action keywords
     const status = r[idx["PRICING MIGRATION STATUS"]];
@@ -122,8 +122,7 @@ function generateSyncAudit(rows, idx, shopifyMap) {
   if (syncRows.length > 0) sheet.getRange(2, 1, syncRows.length, 11).setValues(syncRows);
 }
 
-function generateMasterLedger(rows, idx, shopifyMap) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function generateMasterLedger(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_LEDGER);
   sheet.clear().clearFormats();
 
@@ -131,7 +130,7 @@ function generateMasterLedger(rows, idx, shopifyMap) {
   
   const ledgerRows = rows.map(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
-    const mkdn = parseFloat(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
+    const mkdn = safeNum(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     return [
       sku,
       shopifyMap.get(sku)?.handle || "",
@@ -158,8 +157,7 @@ function generateMasterLedger(rows, idx, shopifyMap) {
   if (ledgerRows.length > 0) sheet.getRange(2, 1, ledgerRows.length, 15).setValues(ledgerRows);
 }
 
-function generateSupplierScorecard(rows, idx, shopifyMap) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SCORECARD);
   sheet.clear().clearFormats();
 
@@ -167,8 +165,8 @@ function generateSupplierScorecard(rows, idx, shopifyMap) {
   rows.forEach(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
     const vendor = shopifyMap.get(sku)?.vendor || "Unknown Vendor";
-    const stockVal = (parseFloat(r[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (parseFloat(r[idx["RESOLVED COST BASE"]]) || 0);
-    const units90 = parseFloat(r[idx["RETAIL VELOCITY SCORE COMPONENT"]]) || 0; // This is still the score, not raw units.
+    const stockVal = (safeNum(r[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (safeNum(r[idx["RESOLVED COST BASE"]]) || 0);
+    const units90 = safeNum(r[idx["RETAIL VELOCITY SCORE COMPONENT"]]) || 0; 
 
     if (!vendorTotals[vendor]) vendorTotals[vendor] = { skus: 0, stockValue: 0, sales90: 0 };
     vendorTotals[vendor].skus++;
@@ -185,12 +183,14 @@ function generateSupplierScorecard(rows, idx, shopifyMap) {
     sheet.getRange(1, 1, out.length, 4).setValues(out);
     applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
   }
-  sheet.getRange(2, 3, out.length - 1, 1).setNumberFormat("$#,##0.00");
+  if (out.length > 1) {
+    sheet.getRange(2, 3, out.length - 1, 1).setNumberFormat("$#,##0.00");
+  }
 }
 
-function logElasticitySnapshot(rows, idx) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(VDM_CONFIG.TABS.ELASTICITY);
-  const date = Utilities.formatDate(new Date(), "GMT", "yyyy-MM-dd");
+function logElasticitySnapshot(ss, rows, idx) {
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.ELASTICITY);
+  const date = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
   
   const snapshot = rows.map(r => [
     date,
