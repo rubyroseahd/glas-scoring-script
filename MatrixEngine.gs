@@ -34,7 +34,7 @@ function executeDashboardRefresh() {
 
     // Velocity Percentile Setup
     const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
-    
+      
     // Data Health Tracking
     const stats = {
       total: 0,
