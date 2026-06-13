@@ -34,6 +34,14 @@ function executeDashboardRefresh() {
 
     // Velocity Percentile Setup
     const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
+    
+    // Data Health Tracking
+    const stats = {
+      total: 0,
+      missingCost: 0,
+      missingInventory: 0,
+      blockedByMargin: 0
+    };
 
     const results = [];
     shopifyData.slice(1).forEach(row => {
@@ -50,6 +58,7 @@ function executeDashboardRefresh() {
       const fulfillment = usaMap.has(sku) ? "SHARED" : "WEBONLY";
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx["VARIANT PRICE"]]);
+      if (cost === null) stats.missingCost++;
       const rawCompare = safeNum(row[sIdx["VARIANT COMPARE AT PRICE"]]);
       
       const compareMSRP = (rawCompare === 0 || rawCompare === null) ? (price || 0) : rawCompare;
@@ -105,6 +114,7 @@ function executeDashboardRefresh() {
       const usaRow = usaMap.get(sku);
       const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA WAREHOUSE ON HAND STOCK"]]) || 0 : 0;
       const totalStock = usaStock + webStock;
+      if (!usaRow && fulfillment === "SHARED") stats.missingInventory++;
       const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
       let propPrice = compareMSRP * (1 - vdmMarkdown);
       let simNet = propPrice * (1 - affiliateRate);
@@ -117,6 +127,7 @@ function executeDashboardRefresh() {
       } else if (mathGuard(simNet, cost)) {
         stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
         if (stackMargin < 0.20) guardrail = "❌ BLOCKED";
+        if (guardrail === "❌ BLOCKED") stats.blockedByMargin++;
       }
       
       const curTierLabel = curMarkdown === 0 ? "Full MSRP" : (curMarkdown <= 0.19 ? "Promo Tier 1 (10-15%)" : (curMarkdown <= 0.35 ? "Promo Tier 2 (20-25%)" : (curMarkdown <= 0.55 ? "Promo Tier 3 (40-50%)" : "Clearance")));
@@ -139,10 +150,17 @@ function executeDashboardRefresh() {
         guardrail = stackMargin < 0.20 ? "❌ BLOCKED" : "✓ SAFE";
       }
 
+      stats.total++;
       results.push([
         sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin
       ]);
     });
+
+    // Log Data Health Results
+    Logger.log(`[SYNC COMPLETE] Processed ${stats.total} SKUs.`);
+    if (stats.missingCost > 0) Logger.log(`[WARN] ${stats.missingCost} SKUs are missing cost data (Waterfall failed).`);
+    if (stats.missingInventory > 0) Logger.log(`[WARN] ${stats.missingInventory} SHARED SKUs missing from USA Warehouse file.`);
+    if (stats.blockedByMargin > 0) Logger.log(`[INFO] ${stats.blockedByMargin} SKUs blocked from target discount by profit guardrails.`);
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();

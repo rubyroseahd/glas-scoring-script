@@ -65,3 +65,48 @@ function logError(module, error) {
   Logger.log(msg);
   console.error(msg);
 }
+
+/**
+ * Standardized Header Index Mapping
+ */
+function getHeaderMap(headers) {
+  if (!headers || !Array.isArray(headers)) return {};
+  const map = {};
+  headers.forEach((h, i) => {
+    if (h !== null && h !== undefined) {
+      map[h.toString().trim().toUpperCase()] = i;
+    }
+  });
+  return map;
+}
+
+/**
+ * Type-safe string conversion
+ */
+function safeStr(val) {
+  return val === null || val === undefined ? "" : String(val).trim();
+}
+
+/**
+ * Type-safe number conversion with percentage/currency cleaning
+ */
+function safeNum(val) {
+  if (val === null || val === undefined || val === "") return null;
+  if (typeof val === "number") return isNaN(val) ? null : val;
+  const str = String(val).trim();
+  const n = parseFloat(str.replace(/[$,%\s]/g, "").replace(/,/g, ""));
+  if (isNaN(n)) return null;
+  return str.includes("%") ? n / 100 : n;
+}
+
+/**
+ * Math validity check for division and comparisons
+ */
+function mathGuard(num1, num2) {
+  return (
+    num1 !== null && 
+    num2 !== null && 
+    !isNaN(num1) && 
+    !isNaN(num2)
+  );
+}
