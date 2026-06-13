@@ -68,44 +68,53 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
 
-  const houseTiers = {}; // Aggregator for 8-column contract
+  // Block 2: House Brand Strategic Distribution
+  const houseTiers = {};
+  const totalHouseSKUs = houseRows.length;
+  const houseAffiliateRate = 0.25; // Standard house brand affiliate assumption
+
   houseRows.forEach(hr => {
-    const tier = hr[idx["TARGET STRATEGIC TIER"]].split(" (")[0];
-    const fulfill = hr[idx["FULFILLMENT TAG"]];
+    const tierRaw = hr[idx["TARGET STRATEGIC TIER"]];
+    const tier = tierRaw.split(" (")[0];
     const mkdn = safeNum(hr[idx["VDM MARKDOWN DEPTH %"]]) || 0;
-    const margin = safeNum(hr[idx["FINAL SIMULATED STACKED MARGIN %"]]) || 0;
-    const costVal = (safeNum(hr[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (safeNum(hr[idx["RESOLVED COST BASE"]]) || 0);
-    const recovery = safeNum(hr[idx["SIMULATED CHECKOUT NET PRICE"]]) * (safeNum(hr[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0);
+    const fulfillment = hr[idx["FULFILLMENT TAG"]];
 
     if (!houseTiers[tier]) {
-      houseTiers[tier] = { count: 0, shared: 0, web: 0, totalMkdn: 0, totalMargin: 0, totalCost: 0, totalRecovery: 0 };
+      houseTiers[tier] = { count: 0, shared: 0, webOnly: 0, baseDiscount: mkdn };
     }
-    const h = houseTiers[tier];
-    h.count++;
-    if (fulfill === "SHARED") h.shared++; else h.web++;
-    h.totalMkdn += mkdn;
-    h.totalMargin += margin;
-    h.totalCost += costVal;
-    h.totalRecovery += recovery;
+    
+    houseTiers[tier].count++;
+    if (fulfillment === "SHARED") houseTiers[tier].shared++;
+    if (fulfillment === "WEBONLY") houseTiers[tier].webOnly++;
   });
 
-  const houseOut = [["House Strategic Tier", "SKU Count", "Shared SKUs", "Web-Only SKUs", "Avg Markdown", "Avg Stacked Margin", "Inventory Cost Basis", "Est. Net Recovery"]];
+  const houseOut = [["House Strategic Tier", "Total SKUs Count", "Shared Allocation", "Web-Only Allocation", "% of Total House Items", "VDM Base Discount %", "Affiliate Coupon Rate", "Final Stacked Checkout Discount"]];
+  
   Object.keys(houseTiers).forEach(t => {
-    const h = houseTiers[t];
+    const d = houseTiers[t];
+    const pctOfTotal = totalHouseSKUs > 0 ? (d.count / totalHouseSKUs) : 0;
+    const finalStacked = 1 - ((1 - d.baseDiscount) * (1 - houseAffiliateRate));
+    
     houseOut.push([
-      t, h.count, h.shared, h.web, 
-      h.totalMkdn / h.count, h.totalMargin / h.count, 
-      h.totalCost, h.totalRecovery
+      t, 
+      d.count, 
+      d.shared, 
+      d.webOnly, 
+      pctOfTotal, 
+      d.baseDiscount, 
+      houseAffiliateRate, 
+      finalStacked
     ]);
   });
 
   const startRow = out.length + 4;
   sheet.getRange(startRow - 1, 1).setValue("House Brand Analytics").setFontWeight("bold");
-  if (houseOut.length > 0) {
+  if (houseOut.length > 1) {
     sheet.getRange(startRow, 1, houseOut.length, 8).setValues(houseOut);
     applyHeaderStyle(sheet.getRange(startRow, 1, 1, 8));
-    sheet.getRange(startRow + 1, 5, houseOut.length - 1, 2).setNumberFormat("0%");
-    sheet.getRange(startRow + 1, 7, houseOut.length - 1, 2).setNumberFormat("$#,##0");
+    // Format percentages
+    sheet.getRange(startRow + 1, 5, houseOut.length - 1, 1).setNumberFormat("0.00%");
+    sheet.getRange(startRow + 1, 6, houseOut.length - 1, 3).setNumberFormat("0.00%");
   }
 }
 

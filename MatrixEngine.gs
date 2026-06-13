@@ -125,11 +125,14 @@ function executeDashboardRefresh() {
       const b2b30DSales = usaRow ? safeNum(usaRow[uIdx["SALES PAST 30 DAYS"]]) || 0 : 0;
       let migration = (vdmMarkdown > curMarkdown) ? "🚨 Deepen Discount" : "📈 Price Recovery/Lift";
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
+
+      // THE FIX: Intercept the text AND revert the math
       if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= 500 && b2b30DSales > 0) {
         migration = "⚠️ HOLD: B2B Volume Stable";
-        // REVERT MATH: Flaw 1 Governance Correction
-        tier = "B2B Protection Hold";
-        vdmMarkdown = curMarkdown;
+        vdmMarkdown = curMarkdown; // Revert markdown to match current live site
+        tier = "B2B Protection Hold"; // Change tier name
+        
+        // Recalculate safe pricing
         propPrice = compareMSRP * (1 - vdmMarkdown);
         simNet = propPrice * (1 - affiliateRate);
         stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
