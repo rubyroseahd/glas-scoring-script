@@ -168,7 +168,7 @@ function executeDashboardRefresh() {
       "SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price",
       "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Retail Velocity Score Component",
       "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier",
-      "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", 
+      "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock",
       "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price",
       "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert",
       "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"
