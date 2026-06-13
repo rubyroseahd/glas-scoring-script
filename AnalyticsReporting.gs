@@ -36,7 +36,7 @@ function getShopifyMap() {
 }
 
 function generateSummaryTab(ss, rows, idx, shopifyMap) {
-  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SUMMARY);
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SUMMARY) || ss.insertSheet(VDM_CONFIG.TABS.SUMMARY);
   sheet.clear().clearFormats();
   
   const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS).getDataRange().getValues();
@@ -55,7 +55,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   ];
 
   const totalRows = rows.length;
-  let panelAData = brackets.map(b => {
+  let panelAData = totalRows === 0 ? [] : brackets.map(b => {
     const shopCount = rows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) || 0)).length;
     const vdmRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]] && r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch));
     const vdmCount = vdmRows.length;
@@ -92,10 +92,9 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
   const totalHouseRows = houseRows.length;
-
   const panelBHeaders = ["Proprietary Strategic Bracket", "GLÄS Current Shopify SKU Count", "GLÄS Current Catalog %", "GLÄS Optimized VDM SKU Count", "GLÄS Optimized VDM Catalog %", "GLÄS Net Weight Shift % (Difference)", "VDM Base Discount %", "Final Stacked Checkout Discount"];
   
-  let panelBData = brackets.map(b => {
+  let panelBData = totalHouseRows === 0 ? [] : brackets.map(b => {
     const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) ?? 0)).length;
     const vdmCount = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch)).length;
     
@@ -120,10 +119,10 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   sheet.getRange(startPanelB + 1, 1, 1, panelBWidth).setValues([panelBHeaders]);
   applyHeaderStyle(sheet.getRange(startPanelB + 1, 1, 1, panelBWidth));
   sheet.getRange(startPanelB + 2, 1, panelBData.length, panelBWidth).setValues(panelBData);
-  sheet.getRange(startPanelB + 1 + panelBData.length, 1, 1, 8).setFontWeight("bold");
+  sheet.getRange(startPanelB + 1 + panelBData.length, 1, 1, panelBWidth).setFontWeight("bold");
 
   [3, 5, 6, 7, 8].forEach(col => {
-    sheet.getRange(startPanelB + 2, col, panelBData.length, 1).setNumberFormat("0.00%");
+    if (panelBData.length > 0) sheet.getRange(startPanelB + 2, col, panelBData.length, 1).setNumberFormat("0.00%");
   });
 
   // --- PANEL C: CHANNEL CLASS VERIFICATION BLOCK ---
@@ -145,7 +144,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
 }
 
 function generateSyncAudit(ss, rows, idx, shopifyMap) {
-  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SYNC_AUDIT);
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SYNC_AUDIT) || ss.insertSheet(VDM_CONFIG.TABS.SYNC_AUDIT);
   sheet.clear().clearFormats();
 
   // Revised Schema Layer 3
@@ -219,7 +218,7 @@ function generateMasterLedger(ss, rows, idx, shopifyMap) {
 }
 
 function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
-  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SCORECARD);
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SCORECARD) || ss.insertSheet(VDM_CONFIG.TABS.SCORECARD);
   sheet.clear().clearFormats();
 
   const vendorTotals = {};
@@ -241,8 +240,8 @@ function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
   });
 
   if (out.length > 0) {
-    sheet.getRange(1, 1, out.length, 4).setValues(out);
-    applyHeaderStyle(sheet.getRange(1, 1, 1, 4));
+    sheet.getRange(1, 1, out.length, out[0].length).setValues(out);
+    applyHeaderStyle(sheet.getRange(1, 1, 1, out[0].length));
   }
   if (out.length > 1) {
     sheet.getRange(2, 3, out.length - 1, 1).setNumberFormat("$#,##0.00");
@@ -250,7 +249,7 @@ function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
 }
 
 function logElasticitySnapshot(ss, rows, idx) {
-  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.ELASTICITY);
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.ELASTICITY) || ss.insertSheet(VDM_CONFIG.TABS.ELASTICITY);
   const date = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
   
   const snapshot = rows.map(r => [
@@ -261,12 +260,13 @@ function logElasticitySnapshot(ss, rows, idx) {
     r[idx["RETAIL VELOCITY SCORE COMPONENT"]]
   ]);
   
+  const snapshotHeaders = ["Snapshot Date", "SKU", "Markdown Depth", "Price", "Velocity"];
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(["Snapshot Date", "SKU", "Markdown Depth", "Price", "Velocity"]);
-    applyHeaderStyle(sheet.getRange(1, 1, 1, 5));
+    sheet.appendRow(snapshotHeaders);
+    applyHeaderStyle(sheet.getRange(1, 1, 1, snapshotHeaders.length));
   }
   if (snapshot.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, snapshot.length, 5).setValues(snapshot);
+    sheet.getRange(sheet.getLastRow() + 1, 1, snapshot.length, snapshot[0].length).setValues(snapshot);
   }
 }
 
@@ -276,7 +276,7 @@ function logElasticitySnapshot(ss, rows, idx) {
 function recoverDashboardState() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dashSheet = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
-  const data = dashSheet.getDataRange().getValues();
+  const data = dashSheet ? dashSheet.getDataRange().getValues() : [];
   if (data.length < 2) throw new Error("Dashboard data not found. Run full sync first.");
   return { headers: data[0], rows: data.slice(1) };
 }

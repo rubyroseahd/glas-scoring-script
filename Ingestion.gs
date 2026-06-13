@@ -40,8 +40,8 @@ function validateHeaders(folder) {
   configs.forEach(cfg => {
     const files = folder.getFilesByName(cfg.file);
     if (!files.hasNext()) throw new Error(`Missing required file: ${cfg.file}`);
-    const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-    if (!data || data.length <= cfg.skip) throw new Error(`File ${cfg.file} is empty or malformed.`);
+    const data = Utilities.parseCsv(files.next().getBlob().getDataAsString()); // data is 0-indexed
+    if (!data || data.length < cfg.skip + 1) throw new Error(`File ${cfg.file} is empty or malformed, or header row not found at expected index ${cfg.skip}.`);
     
     const fileHeaders = data[cfg.skip].map(h => h.toString().trim().toUpperCase());
     cfg.headers.forEach(req => {
