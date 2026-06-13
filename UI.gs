@@ -24,10 +24,7 @@ function onOpen() {
 function triggerNuclearArchitectureWipe() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
-    'CRITICAL RESET REQUIRED',
-    'This will wipe all dashboards and historical logs to rebuild the system architecture. Confirm execution?',
-    ui.ButtonSet.YES_NO
-  );
+    'CRITICAL RESET REQUIRED. This will wipe all dashboards and historical logs to rebuild the system architecture. Confirm execution?', ui.ButtonSet.YES_NO);
 
   if (response === ui.Button.YES) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
