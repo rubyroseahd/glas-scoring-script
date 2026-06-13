@@ -24,6 +24,21 @@ function onOpen() {
 function triggerNuclearArchitectureWipe() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
+
+/**
+ * Deletes specific legacy tabs that are no longer part of the VDM_CONFIG.TABS registry.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss The active spreadsheet.
+ */
+function deleteSpecificLegacyTabs(ss) {
+  const legacyTabNames = ["[05] Warehouse Aging", "[06] MAP Compliance"];
+  legacyTabNames.forEach(tabName => {
+    const sheet = ss.getSheetByName(tabName);
+    if (sheet) {
+      ss.deleteSheet(sheet);
+      Logger.log(`Deleted legacy sheet: ${tabName}`);
+    }
+  });
+}
     'CRITICAL RESET REQUIRED',
     'This will wipe all dashboards and historical logs to rebuild the system architecture. Confirm execution?',
     ui.ButtonSet.YES_NO
@@ -46,6 +61,9 @@ function triggerNuclearArchitectureWipe() {
     settings.getRange("A1:E1").setValues([["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "", "Affiliate Coupon Rate"]]);
     applyHeaderStyle(settings.getRange("A1:E1"));
     settings.getRange("E2").setValue(0.15).setNumberFormat("0%");
+    
+    // Delete specific legacy tabs that are no longer in VDM_CONFIG.TABS
+    deleteSpecificLegacyTabs(ss);
     
     ui.alert("System Architecture Wiped and Rebuilt.");
   }

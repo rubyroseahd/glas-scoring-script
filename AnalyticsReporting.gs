@@ -173,7 +173,14 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
 
   sheet.getRange(1, 1, 1, 11).setValues([headers]);
   applyHeaderStyle(sheet.getRange(1, 1, 1, 11));
-  if (syncRows.length > 0) sheet.getRange(2, 1, syncRows.length, 11).setValues(syncRows).setNumberFormat("0.00");
+  if (syncRows.length > 0) {
+    const range = sheet.getRange(2, 1, syncRows.length, 11);
+    range.setValues(syncRows);
+    
+    // Targeted Formatting per One-Pass Plan
+    sheet.getRange(2, 5, syncRows.length, 1).setNumberFormat("0.00%"); // Markdown %
+    [6, 7, 8, 9, 10].forEach(col => sheet.getRange(2, col, syncRows.length, 1).setNumberFormat("0.00")); // Pricing metrics
+  }
 }
 
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
@@ -202,7 +209,14 @@ function generateMasterLedger(ss, rows, idx, shopifyMap) {
 
   sheet.getRange(1, 1, 1, 15).setValues([headers]);
   applyHeaderStyle(sheet.getRange(1, 1, 1, 15));
-  if (ledgerRows.length > 0) sheet.getRange(2, 1, ledgerRows.length, 15).setValues(ledgerRows).setNumberFormat("0.00");
+  if (ledgerRows.length > 0) {
+    const range = sheet.getRange(2, 1, ledgerRows.length, 15);
+    range.setValues(ledgerRows);
+
+    // Separate dollar formatting from percentage margin fields
+    [8, 9, 10, 11, 12].forEach(col => sheet.getRange(2, col, ledgerRows.length, 1).setNumberFormat("0.00"));
+    [7, 13, 15].forEach(col => sheet.getRange(2, col, ledgerRows.length, 1).setNumberFormat("0.00%"));
+  }
 }
 
 function generateSupplierScorecard(ss, rows, idx, shopifyMap) {

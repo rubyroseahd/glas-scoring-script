@@ -17,7 +17,7 @@ const VDM_CONFIG = {
   TABS: {
     // User-Facing
     BRIEF: "[00] Executive Brief", 
-    ACTION: "[00] Action Items & Sign-off", 
+    ACTION: "[00] Action Items & Sign-off",
     SETTINGS: "[01] Settings & Registries",
     DASHBOARD: "[02] Dashboard Matrix", 
     SUMMARY: "[03] Tier Summary & Distribution Panel", 
