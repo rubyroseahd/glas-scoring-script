@@ -5,9 +5,19 @@
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('EEI Pricing Engine Launcher')
-    .addItem('1. Run Flexible Data Refresh', 'executeFlexibleRefreshProcess')
+    .addItem('1. Full System Sync (Standard)', 'executeFlexibleRefreshProcess')
     .addSeparator()
-    .addItem('2. Reset Grid Architecture Logs', 'triggerNuclearArchitectureWipe')
+    .addSubMenu(ui.createMenu('2. Targeted Data Ingestion')
+      .addItem('Sync Inventory Snapshot Only', 'workflowIngestInventoryOnly')
+      .addItem('Refresh Commercial Metadata', 'workflowIngestMetadataOnly'))
+    .addSubMenu(ui.createMenu('3. Re-calculate & Simulate')
+      .addItem('Recalculate Matrix (Memory Only)', 'workflowComputeOnly'))
+    .addSubMenu(ui.createMenu('4. Generate Specific Reports')
+      .addItem('Update Executive Summary [03] Only', 'workflowReportSummaryOnly')
+      .addItem('Generate Sync Audit [07] Only', 'workflowReportSyncOnly')
+      .addItem('Refresh Master Ledger [09] Only', 'workflowReportLedgerOnly'))
+    .addSeparator()
+    .addItem('5. Reset Grid Architecture Logs', 'triggerNuclearArchitectureWipe')
     .addToUi();
 }
 
