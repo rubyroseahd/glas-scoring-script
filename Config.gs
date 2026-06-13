@@ -23,8 +23,6 @@ const VDM_CONFIG = {
     SUMMARY: "[03] Tier Summary & Distribution Panel", 
     SCORECARD: "[01] Supplier Scorecard & Capital Velocity", 
     ELASTICITY: "[04] Pricing Elasticity & Lift Analytics Ledger", 
-    AGING: "[05] Warehouse Aging & Alternative Liquidation Workspace", 
-    COMPLIANCE: "[06] MAP Compliance & Marketplace Competitor Variance", 
     SYNC_AUDIT: "[07] Storefront Update & Sync Audit",
     MASTER_LEDGER: "[09] Master Pricing & Margin Ledger",
     

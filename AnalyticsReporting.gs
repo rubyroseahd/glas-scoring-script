@@ -42,67 +42,93 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS).getDataRange().getValues();
   const globalAffiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15;
 
-  // --- PANEL A: GLOBAL CATALOG STRATEGIC TIER ALLOCATION SUMMARY ---
-  const panelAHeaders = ["Strategic Tier", "Total active SKUs Count", "Shared Allocation Count", "Wholesale B2B Only Count", "Web-Only Allocation Count", "% of Total Workbook Catalog", "VDM Base Markdown Depth %", "Active Global Affiliate Coupon Rate", "Blended Cumulative Stacked Discount %", "Risk Classification Profile", "Operational Review Note"];
-  const tierSpecs = [
-    { name: "Top Hero (0% Off)", mkdn: 0.00, risk: "None-Low" },
-    { name: "Signature Hero (30% Off)", mkdn: 0.30, risk: "Low-Med" },
-    { name: "Proven Performer (40% Off)", mkdn: 0.40, risk: "Med" },
-    { name: "Accelerator (50% Off)", mkdn: 0.50, risk: "Med-High" },
-    { name: "Clearance/Archive (65% Off)", mkdn: 0.65, risk: "High" },
-    { name: "New Launch (0% Hold)", mkdn: 0.00, risk: "None" },
-    { name: "B2B Protection Hold", mkdn: 0.00, risk: "None" } // Captures Governance holds
+  // --- PANEL A: GLOBAL CATALOG COMPARATIVE DISTRIBUTION MATRIX ---
+  const panelAHeaders = ["Strategic Pricing Bracket", "Current Shopify SKU Count", "Current Shopify Catalog %", "Optimized VDM SKU Count", "Optimized VDM Catalog %", "Net Allocation Weight Shift % (Difference)", "Base VDM Markdown Depth %", "Active Global Affiliate Rate Reference", "Blended Cumulative Stacked Discount %", "Risk Classification Profile"];
+  const brackets = [
+    { name: "Top Hero Bracket", mkdn: 0.00, risk: "None-Low", shopCheck: (m) => m === 0, vdmMatch: "Top Hero" },
+    { name: "Signature Hero Bracket", mkdn: 0.30, risk: "Low-Med", shopCheck: (m) => m > 0 && m <= 0.35, vdmMatch: "Signature Hero" },
+    { name: "Proven Performer Bracket", mkdn: 0.40, risk: "Med", shopCheck: (m) => m > 0.35 && m <= 0.45, vdmMatch: "Proven Performer" },
+    { name: "Accelerator Bracket", mkdn: 0.50, risk: "Med-High", shopCheck: (m) => m > 0.45 && m <= 0.55, vdmMatch: "Accelerator" },
+    { name: "Clearance/Archive Bracket", mkdn: 0.65, risk: "High", shopCheck: (m) => m > 0.55, vdmMatch: "Clearance/Archive" },
+    { name: "New Launch Bracket", mkdn: 0.00, risk: "None", shopCheck: (m) => false, vdmMatch: "New Launch" },
+    { name: "B2B Protection Hold Bracket", mkdn: 0.00, risk: "None", shopCheck: (m) => false, vdmMatch: "B2B Protection Hold" }
   ];
 
-  const panelAData = tierSpecs.map(spec => {
-    const tierRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(spec.name.split(" (")[0]));
-    const count = tierRows.length;
-    const shared = tierRows.filter(r => r[idx["FULFILLMENT TAG"]] === "SHARED" && r[idx["PRICING MIGRATION STATUS"]] !== "⚠️ HOLD: B2B Volume Stable").length;
-    const b2b = tierRows.filter(r => r[idx["PRICING MIGRATION STATUS"]] === "⚠️ HOLD: B2B Volume Stable").length;
-    const web = tierRows.filter(r => r[idx["FULFILLMENT TAG"]] === "WEBONLY").length;
-    const pct = count / rows.length;
-    const stacked = 1 - ((1 - spec.mkdn) * (1 - globalAffiliateRate));
+  const totalRows = rows.length;
+  let panelAData = brackets.map(b => {
+    const shopCount = rows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]))).length;
+    const vdmRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch));
+    const vdmCount = vdmRows.length;
+    
+    const shopPct = shopCount / totalRows;
+    const vdmPct = vdmCount / totalRows;
+    const diff = vdmPct - shopPct;
+    const stacked = 1 - ((1 - b.mkdn) * (1 - globalAffiliateRate));
 
-    return [spec.name, count, shared, b2b, web, pct, spec.mkdn, globalAffiliateRate, stacked, spec.risk, ""];
+    return [b.name, shopCount, shopPct, vdmCount, vdmPct, diff, b.mkdn, globalAffiliateRate, stacked, b.risk];
   });
 
+  // Add Total Row for Panel A
+  const panelATotals = ["Total Catalog Reconciliation", 
+    panelAData.reduce((s, r) => s + r[1], 0), panelAData.reduce((s, r) => s + r[2], 0),
+    panelAData.reduce((s, r) => s + r[3], 0), panelAData.reduce((s, r) => s + r[4], 0),
+    panelAData.reduce((s, r) => s + r[5], 0), "", "", "", ""];
+  panelAData.push(panelATotals);
+
   sheet.getRange(1, 1).setValue("GLOBAL CATALOG ALLOCATION SUMMARY MATRIX").setFontSize(14).setFontWeight("bold").setBackground(VDM_CONFIG.DESIGN.PANEL_GLOBAL_BG).setFontColor("#FFFFFF");
-  sheet.getRange(2, 1, 1, 11).setValues([panelAHeaders]);
-  applyHeaderStyle(sheet.getRange(2, 1, 1, 11));
-  sheet.getRange(3, 1, panelAData.length, 11).setValues(panelAData);
+  sheet.getRange(2, 1, 1, 10).setValues([panelAHeaders]);
+  applyHeaderStyle(sheet.getRange(2, 1, 1, 10));
+  sheet.getRange(3, 1, panelAData.length, 10).setValues(panelAData);
+  sheet.getRange(2 + panelAData.length, 1, 1, 10).setFontWeight("bold");
   
   // Formatting Percentages for Panel A
-  sheet.getRange(3, 6, panelAData.length, 4).setNumberFormat("0.00%");
+  [3, 5, 6, 7, 8, 9].forEach(col => {
+    sheet.getRange(3, col, panelAData.length, 1).setNumberFormat("0.00%");
+  });
 
-  // --- PANEL B: GLÄS & GLASTOY PROPRIETARY BRAND INSIGHTS PANEL ---
+  // --- PANEL B: GLÄS & GLASTOY PROPRIETARY CATALOG DELTA PANEL ---
   const houseRows = rows.filter(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
     const vendorName = (shopifyMap.get(sku)?.vendor || "").toUpperCase();
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
+  const totalHouseRows = houseRows.length;
 
-  const panelBHeaders = ["Proprietary Strategic Tier", "GLÄS Active SKUs Count", "Proprietary Shared Count", "Proprietary Web-Only Count", "% of GLÄS Catalog footprint", "VDM Base Discount %", "Universal Affiliate Rate Reference", "Final Stacked Checkout Discount"];
+  const panelBHeaders = ["Proprietary Strategic Bracket", "GLÄS Current Shopify SKU Count", "GLÄS Current Catalog %", "GLÄS Optimized VDM SKU Count", "GLÄS Optimized VDM Catalog %", "GLÄS Net Weight Shift % (Difference)", "VDM Base Discount %", "Final Stacked Checkout Discount"];
   
-  const panelBData = tierSpecs.map(spec => {
-    const tierRows = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(spec.name.split(" (")[0]));
-    const count = tierRows.length;
-    const shared = tierRows.filter(r => r[idx["FULFILLMENT TAG"]] === "SHARED").length;
-    const web = tierRows.filter(r => r[idx["FULFILLMENT TAG"]] === "WEBONLY").length;
-    const pct = houseRows.length > 0 ? count / houseRows.length : 0;
-    const stacked = 1 - ((1 - spec.mkdn) * (1 - globalAffiliateRate));
+  let panelBData = brackets.map(b => {
+    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]))).length;
+    const vdmCount = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch)).length;
+    
+    const shopPct = totalHouseRows > 0 ? shopCount / totalHouseRows : 0;
+    const vdmPct = totalHouseRows > 0 ? vdmCount / totalHouseRows : 0;
+    const diff = vdmPct - shopPct;
+    const stacked = 1 - ((1 - b.mkdn) * (1 - globalAffiliateRate));
 
-    return [spec.name, count, shared, web, pct, spec.mkdn, globalAffiliateRate, stacked];
+    return [b.name, shopCount, shopPct, vdmCount, vdmPct, diff, b.mkdn, stacked];
   });
 
-  const startPanelB = panelAData.length + 5;
+  // Add Total Row for Panel B
+  const panelBTotals = ["Proprietary Reconciliation Total", 
+    panelBData.reduce((s, r) => s + r[1], 0), panelBData.reduce((s, r) => s + r[2], 0),
+    panelBData.reduce((s, r) => s + r[3], 0), panelBData.reduce((s, r) => s + r[4], 0),
+    panelBData.reduce((s, r) => s + r[5], 0), "", ""];
+  panelBData.push(panelBTotals);
+
+  const startPanelB = 3 + panelAData.length + 4;
   sheet.getRange(startPanelB, 1).setValue("GLÄS & GLASTOY PROPRIETARY BRAND INSIGHTS PANEL").setFontSize(12).setFontWeight("bold").setBackground(VDM_CONFIG.DESIGN.PANEL_PROPRIETARY_BG).setFontColor("#FFFFFF");
   sheet.getRange(startPanelB + 1, 1, 1, 8).setValues([panelBHeaders]);
   applyHeaderStyle(sheet.getRange(startPanelB + 1, 1, 1, 8));
   sheet.getRange(startPanelB + 2, 1, panelBData.length, 8).setValues(panelBData);
-  sheet.getRange(startPanelB + 2, 5, panelBData.length, 4).setNumberFormat("0.00%");
+  sheet.getRange(startPanelB + 1 + panelBData.length, 1, 1, 8).setFontWeight("bold");
+
+  // Formatting Percentages for Panel B
+  [3, 5, 6, 7, 8].forEach(col => {
+    sheet.getRange(startPanelB + 2, col, panelBData.length, 1).setNumberFormat("0.00%");
+  });
 
   // --- PANEL C: CHANNEL CLASS VERIFICATION BLOCK ---
-  const startPanelC = startPanelB + panelBData.length + 4;
+  const startPanelC = startPanelB + 2 + panelBData.length + 3;
   const sharedTotal = rows.filter(r => r[idx["FULFILLMENT TAG"]] === "SHARED" && r[idx["PRICING MIGRATION STATUS"]] !== "⚠️ HOLD: B2B Volume Stable").length;
   const b2bTotal = rows.filter(r => r[idx["PRICING MIGRATION STATUS"]] === "⚠️ HOLD: B2B Volume Stable").length;
   const webTotal = rows.filter(r => r[idx["FULFILLMENT TAG"]] === "WEBONLY").length;
