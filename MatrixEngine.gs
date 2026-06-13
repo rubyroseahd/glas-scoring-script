@@ -106,8 +106,8 @@ function executeDashboardRefresh() {
       const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA WAREHOUSE ON HAND STOCK"]]) || 0 : 0;
       const totalStock = usaStock + webStock;
       const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
-      const propPrice = compareMSRP * (1 - vdmMarkdown);
-      const simNet = propPrice * (1 - affiliateRate);
+      let propPrice = compareMSRP * (1 - vdmMarkdown);
+      let simNet = propPrice * (1 - affiliateRate);
       
       let stackMargin = 0;
       let guardrail = "✓ SAFE";
@@ -127,6 +127,13 @@ function executeDashboardRefresh() {
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
       if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= 500 && b2b30DSales > 0) {
         migration = "⚠️ HOLD: B2B Volume Stable";
+        // REVERT MATH: Flaw 1 Governance Correction
+        tier = "B2B Protection Hold";
+        vdmMarkdown = curMarkdown;
+        propPrice = compareMSRP * (1 - vdmMarkdown);
+        simNet = propPrice * (1 - affiliateRate);
+        stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
+        guardrail = stackMargin < 0.20 ? "❌ BLOCKED" : "✓ SAFE";
       }
 
       results.push([

@@ -68,21 +68,44 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
 
-  // Block 2: House Brand Strategic Distribution
-  const houseTiers = {};
+  const houseTiers = {}; // Aggregator for 8-column contract
   houseRows.forEach(hr => {
     const tier = hr[idx["TARGET STRATEGIC TIER"]].split(" (")[0];
-    houseTiers[tier] = (houseTiers[tier] || 0) + 1;
+    const fulfill = hr[idx["FULFILLMENT TAG"]];
+    const mkdn = safeNum(hr[idx["VDM MARKDOWN DEPTH %"]]) || 0;
+    const margin = safeNum(hr[idx["FINAL SIMULATED STACKED MARGIN %"]]) || 0;
+    const costVal = (safeNum(hr[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (safeNum(hr[idx["RESOLVED COST BASE"]]) || 0);
+    const recovery = safeNum(hr[idx["SIMULATED CHECKOUT NET PRICE"]]) * (safeNum(hr[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0);
+
+    if (!houseTiers[tier]) {
+      houseTiers[tier] = { count: 0, shared: 0, web: 0, totalMkdn: 0, totalMargin: 0, totalCost: 0, totalRecovery: 0 };
+    }
+    const h = houseTiers[tier];
+    h.count++;
+    if (fulfill === "SHARED") h.shared++; else h.web++;
+    h.totalMkdn += mkdn;
+    h.totalMargin += margin;
+    h.totalCost += costVal;
+    h.totalRecovery += recovery;
   });
 
-  const houseOut = [["House Strategic Tier", "SKU Count"]];
-  Object.keys(houseTiers).forEach(t => houseOut.push([t, houseTiers[t]]));
+  const houseOut = [["House Strategic Tier", "SKU Count", "Shared SKUs", "Web-Only SKUs", "Avg Markdown", "Avg Stacked Margin", "Inventory Cost Basis", "Est. Net Recovery"]];
+  Object.keys(houseTiers).forEach(t => {
+    const h = houseTiers[t];
+    houseOut.push([
+      t, h.count, h.shared, h.web, 
+      h.totalMkdn / h.count, h.totalMargin / h.count, 
+      h.totalCost, h.totalRecovery
+    ]);
+  });
 
   const startRow = out.length + 4;
   sheet.getRange(startRow - 1, 1).setValue("House Brand Analytics").setFontWeight("bold");
   if (houseOut.length > 0) {
-    sheet.getRange(startRow, 1, houseOut.length, 2).setValues(houseOut);
-    applyHeaderStyle(sheet.getRange(startRow, 1, 1, 2));
+    sheet.getRange(startRow, 1, houseOut.length, 8).setValues(houseOut);
+    applyHeaderStyle(sheet.getRange(startRow, 1, 1, 8));
+    sheet.getRange(startRow + 1, 5, houseOut.length - 1, 2).setNumberFormat("0%");
+    sheet.getRange(startRow + 1, 7, houseOut.length - 1, 2).setNumberFormat("$#,##0");
   }
 }
 
