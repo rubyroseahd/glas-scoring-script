@@ -73,11 +73,21 @@ function getHeaderMap(headers) {
   if (!headers || !Array.isArray(headers)) return {};
   const map = {};
   headers.forEach((h, i) => {
-    if (h !== null && h !== undefined) {
+    if (h !== null && h !== undefined && h.toString().trim() !== "") {
       map[h.toString().trim().toUpperCase()] = i;
     }
   });
   return map;
+}
+
+/**
+ * Standardized header formatting across the reporting suite.
+ */
+function applyHeaderStyle(range) {
+  range.setBackground(VDM_CONFIG.DESIGN.HEADER_BG)
+       .setFontColor(VDM_CONFIG.DESIGN.HEADER_TEXT)
+       .setFontWeight("bold")
+       .setHorizontalAlignment("center");
 }
 
 /**
@@ -102,11 +112,6 @@ function safeNum(val) {
 /**
  * Math validity check for division and comparisons
  */
-function mathGuard(num1, num2) {
-  return (
-    num1 !== null && 
-    num2 !== null && 
-    !isNaN(num1) && 
-    !isNaN(num2)
-  );
+function mathGuard(...values) {
+  return values.every(v => typeof v === 'number' && v !== null && !isNaN(v));
 }

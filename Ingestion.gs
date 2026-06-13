@@ -196,10 +196,3 @@ function writeToHiddenTab(name, data, ss) {
     sheet.getRange(1, 1, data.length, 1).setNumberFormat("@");
   }
 }
-
-function applyHeaderStyle(range) {
-  range.setBackground(VDM_CONFIG.DESIGN.HEADER_BG)
-       .setFontColor(VDM_CONFIG.DESIGN.HEADER_TEXT)
-       .setFontWeight("bold")
-       .setHorizontalAlignment("center");
-}
