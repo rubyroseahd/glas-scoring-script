@@ -91,7 +91,8 @@ function ingestEEI(folder, fileName, tabName, ss) {
   if (!files.hasNext()) throw new Error(`${fileName} missing`);
   
   const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  const hRow = data[4]; 
+  if (data.length <= 4) throw new Error(`File ${fileName} is too short or malformed.`);
+  const hRow = data[4];
   const hMap = getHeaderMap(hRow);
   const targetHeaders = tabName === VDM_CONFIG.TABS.RAW_EEI_USA ? VDM_CONFIG.HEADERS.USA_WAREHOUSE : VDM_CONFIG.HEADERS.WEB_WAREHOUSE;
   

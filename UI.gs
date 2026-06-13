@@ -40,9 +40,10 @@ function triggerNuclearArchitectureWipe() {
     
     // Initialize Settings Tab
     const settings = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS);
-    settings.getRange("A1:E1").setValues([["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "", "Affiliate Coupon Rate"]]);
-    applyHeaderStyle(settings.getRange("A1:E1"));
-    settings.getRange("E2").setValue(0.15).setNumberFormat("0%");
+    const settingsHeaders = [["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "B2B Reserve Min Qty", "Affiliate Coupon Rate"]];
+    settings.getRange(1, 1, 1, 5).setValues(settingsHeaders);
+    applyHeaderStyle(settings.getRange(1, 1, 1, settingsHeaders[0].length));
+    settings.getRange("E2").setValue(0.15).setNumberFormat("0.00%");
     
     // Delete specific legacy tabs that are no longer in VDM_CONFIG.TABS
     deleteSpecificLegacyTabs(ss);

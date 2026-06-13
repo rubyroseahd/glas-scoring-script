@@ -182,6 +182,7 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
 }
 
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_LEDGER) || ss.insertSheet(VDM_CONFIG.TABS.MASTER_LEDGER);
   sheet.clear().clearFormats();
 
   // Revised Schema Layer 4 - Financial Sequencing
