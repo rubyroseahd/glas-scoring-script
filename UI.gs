@@ -17,6 +17,11 @@ function onOpen() {
       .addItem('Generate Sync Audit [07] Only', 'workflowReportSyncOnly')
       .addItem('Refresh Master Ledger [09] Only', 'workflowReportLedgerOnly'))
     .addSeparator()
+    .addSubMenu(ui.createMenu('Advanced Diagnostics')
+      .addItem('Run Pre-Flight Sanity Check', 'runPreFlightSanityCheck')
+      .addItem('Commit Shopify Sync Only (Bypass Matrix)', 'commitShopifySyncOnly')
+      .addItem('Emergency Matrix Rollback', 'rollbackToRecoveryPoint'))
+    .addSeparator()
     .addItem('5. Reset Grid Architecture Logs', 'triggerNuclearArchitectureWipe')
     .addToUi();
 }
@@ -65,4 +70,42 @@ function deleteSpecificLegacyTabs(ss) {
       Logger.log(`Deleted legacy sheet: ${tabName}`);
     }
   });
+}
+
+function runPreFlightSanityCheck() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
+    validateHeaders(folder);
+    ui.alert("SUCCESS: All source file headers and directory structures validated.");
+  } catch (e) {
+    ui.alert("SANITY CHECK FAILED: " + e.message);
+  }
+}
+
+function commitShopifySyncOnly() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const state = recoverDashboardState();
+    const shopifyMap = getShopifyMap();
+    generateSyncAudit(ss, state.rows, getHeaderMap(state.headers), shopifyMap);
+    ui.alert("Storefront Sync Refreshed (Matrix Engine Bypassed).");
+  } catch (e) {
+    ui.alert("Sync Refresh Failed: " + e.message);
+  }
+}
+
+function rollbackToRecoveryPoint() {
+  const ui = SpreadsheetApp.getUi();
+  const confirm = ui.alert("PANIC ROLLBACK: Overwrite active Matrix with last stable backup?", ui.ButtonSet.YES_NO);
+  if (confirm === ui.Button.YES) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dash = getOrCreateSheet(VDM_CONFIG.TABS.DASHBOARD);
+    const backup = ss.getSheetByName(VDM_CONFIG.TABS.BACKUP);
+    if (!backup) throw new Error("No recovery point found.");
+    dash.clear();
+    backup.getDataRange().copyTo(dash.getRange(1,1));
+    ui.alert("System Rollback Complete.");
+  }
 }

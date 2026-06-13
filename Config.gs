@@ -32,7 +32,8 @@ const VDM_CONFIG = {
     RAW_EEI_WEB: "_raw_eei_web",
     RAW_SALES: "_raw_sales",
     RAW_COST: "_raw_cost",
-    MASTER_COST: "_resolved_cost_base"
+    MASTER_COST: "_resolved_cost_base",
+    BACKUP: "_backup_matrix_data"
   },
 
   DESIGN: {

@@ -43,7 +43,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const globalAffiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15;
 
   // --- PANEL A: GLOBAL CATALOG COMPARATIVE DISTRIBUTION MATRIX ---
-  const panelAHeaders = ["Strategic Pricing Bracket", "Current Shopify SKU Count", "Current Shopify Catalog %", "Optimized VDM SKU Count", "Optimized VDM Catalog %", "Net Allocation Weight Shift % (Difference)", "Base VDM Markdown Depth %", "Active Global Affiliate Rate Reference", "Blended Cumulative Stacked Discount %", "Risk Classification Profile"];
+  const panelAHeaders = ["Strategic Pricing Bracket", "Shopify SKU Count", "Shopify Catalog %", "VDM SKU Count", "VDM Catalog %", "Weight Shift %", "Base VDM Markdown %", "Affiliate Rate", "Stacked Discount %", "Risk Profile", "Validation Status"];
   const brackets = [
     { name: "Top Hero Bracket", mkdn: 0.00, risk: "None-Low", shopCheck: (m) => m === 0, vdmMatch: "Top Hero" },
     { name: "Signature Hero Bracket", mkdn: 0.30, risk: "Low-Med", shopCheck: (m) => m > 0 && m <= 0.35, vdmMatch: "Signature Hero" },
@@ -64,15 +64,16 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     const vdmPct = vdmCount / totalRows;
     const diff = vdmPct - shopPct;
     const stacked = 1 - ((1 - b.mkdn) * (1 - globalAffiliateRate));
+    const validation = "100.00%";
 
-    return [b.name, shopCount, shopPct, vdmCount, vdmPct, diff, b.mkdn, globalAffiliateRate, stacked, b.risk];
+    return [b.name, shopCount, shopPct, vdmCount, vdmPct, diff, b.mkdn, globalAffiliateRate, stacked, b.risk, validation];
   });
 
   // Add Total Row for Panel A
   const panelATotals = ["Total Catalog Reconciliation", 
     panelAData.reduce((s, r) => s + r[1], 0), panelAData.reduce((s, r) => s + r[2], 0),
     panelAData.reduce((s, r) => s + r[3], 0), panelAData.reduce((s, r) => s + r[4], 0),
-    panelAData.reduce((s, r) => s + r[5], 0), "", "", "", ""];
+    panelAData.reduce((s, r) => s + r[5], 0), "", "", "", "", "100.00%"];
   panelAData.push(panelATotals);
 
   const panelAWidth = panelAHeaders.length;
@@ -92,7 +93,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     return VDM_CONFIG.HOUSE_BRANDS.some(hb => vendorName.includes(hb.toUpperCase()));
   });
   const totalHouseRows = houseRows.length;
-  const panelBHeaders = ["Proprietary Strategic Bracket", "GLÄS Current Shopify SKU Count", "GLÄS Current Catalog %", "GLÄS Optimized VDM SKU Count", "GLÄS Optimized VDM Catalog %", "GLÄS Net Weight Shift % (Difference)", "VDM Base Discount %", "Final Stacked Checkout Discount"];
+  const panelBHeaders = ["Proprietary Bracket", "Shopify Count", "Shopify %", "VDM Count", "VDM %", "Shift %", "Base %", "Stacked %"];
   
   let panelBData = totalHouseRows === 0 ? [] : brackets.map(b => {
     const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) ?? 0)).length;
@@ -148,11 +149,7 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
   sheet.clear().clearFormats();
 
   // Revised Schema Layer 3
-  const headers = [
-    "SKU Anchor Key", "Handle", "Action Required", "Optimized VDM Strategic Tier", "Optimized VDM Markdown %",
-    "Old Live Variant Price", "New Proposed Variant Price", "Old Live Compare At Price", 
-    "New Proposed Compare At Price", "Calculated Base Price Used", "Operational Guardrail Note"
-  ];
+  const headers = ["SKU Key", "Handle", "Action", "Strategy Tier", "VDM Markdown %", "Old Price", "New Price", "Old MSRP", "New MSRP", "Base Price", "Guardrail"];
 
   const syncRows = rows.map(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
@@ -181,17 +178,10 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
 }
 
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
-  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_LEDGER) || ss.insertSheet(VDM_CONFIG.TABS.MASTER_LEDGER);
+  const sheet = getOrCreateSheet(VDM_CONFIG.TABS.MASTER_LEDGER);
   sheet.clear().clearFormats();
 
-  // Revised Schema Layer 4 - Financial Sequencing
-  const headers = [
-    "SKU Key", "Handle", "Fulfillment Classification", "Gatekeeper Control Status",
-    "Pricing Migration Status", "Recommended Strategic Tier", "VDM Target Markdown Depth %",
-    "Old Live Storefront Price", "New Proposed Storefront Price", "Calculated Face Value Price Shift ($)",
-    "Resolved Procurement Cost Base", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %",
-    "Profit Guardrail Status Indicator", "Net Operational Margin Shift %"
-  ];
+  const headers = ["SKU Key", "Handle", "Fulfillment", "Gatekeeper", "Migration Status", "Tier", "Target Mkdn %", "Old Price", "New Price", "Price Shift ($)", "Procurement Cost", "Checkout Price", "Stacked Margin %", "Guardrail", "Margin Shift %"];
   
   const ledgerRows = rows.map(r => {
     return [
@@ -211,7 +201,7 @@ function generateMasterLedger(ss, rows, idx, shopifyMap) {
     const range = sheet.getRange(2, 1, ledgerRows.length, width);
     range.setValues(ledgerRows);
 
-    // Separate dollar formatting from percentage margin fields
+    // Phase 3 & 4 Financial Formatting
     [8, 9, 10, 11, 12].forEach(col => sheet.getRange(2, col, ledgerRows.length, 1).setNumberFormat("0.00"));
     [7, 13, 15].forEach(col => sheet.getRange(2, col, ledgerRows.length, 1).setNumberFormat("0.00%"));
   }

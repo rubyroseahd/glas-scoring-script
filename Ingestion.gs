@@ -170,11 +170,11 @@ function executeCostResolutionWaterfall() {
     
     let final = 0;
     if (ext) {
-      final = safeNum(ext[cIdx.eei]) || safeNum(ext[cIdx.glas]) || safeNum(ext[cIdx.cotr]) || shopifyCost;
+      final = safeNum(ext[cIdx.eei]) || safeNum(ext[cIdx.glas]) || safeNum(ext[cIdx.cotr]) || shopifyCost || 0;
     } else {
-      final = shopifyCost;
+      final = shopifyCost || 0;
     }
-    resolved.push([sku, final]);
+    resolved.push([sku, safeNum(final)]);
   });
 
   writeToHiddenTab(VDM_CONFIG.TABS.MASTER_COST, resolved, ss);
