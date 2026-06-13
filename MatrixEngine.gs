@@ -62,7 +62,7 @@ function executeDashboardRefresh() {
       const rawCompare = safeNum(row[sIdx["VARIANT COMPARE AT PRICE"]]);
       
       const compareMSRP = (rawCompare === 0 || rawCompare === null) ? (price || 0) : rawCompare;
-      const curMarkdown = (compareMSRP === price || compareMSRP === 0) ? 0 : (compareMSRP - (price || 0)) / compareMSRP;
+      const curMarkdown = (compareMSRP <= 0) ? 0 : (compareMSRP - (price || 0)) / compareMSRP;
       const curMargin = (price === 0 || price === null || cost === null) ? 0 : (price - cost) / price;
       
       // Velocity Score (I) - Ensure sIdx["Net items sold"] is valid
@@ -168,22 +168,19 @@ function executeDashboardRefresh() {
       "SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price",
       "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Retail Velocity Score Component",
       "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier",
-      "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock",
-      "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price",
+      "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", 
+      "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price",
       "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert",
       "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"
     ];
     
-    const headerRange = dashSheet.getRange(1, 1, 1, 26);
+    const headerRange = dashSheet.getRange(1, 1, 1, dashboardHeaders.length);
     headerRange.setValues([dashboardHeaders]);
     applyHeaderStyle(headerRange);
-    if (results.length > 0 && results[0].length > 0) { // Ensure results array is not empty and has columns
-      dashSheet.getRange(2, 1, results.length, 26).setValues(results);
+    if (results.length > 0) {
+      dashSheet.getRange(2, 1, results.length, results[0].length).setValues(results);
       dashSheet.getRange(2, 1, results.length, 1).setNumberFormat("@");
     }
-    
-    applyConditionalFormatting(dashSheet, results.length);
-    dashSheet.setFrozenRows(1);
 
     return { rows: results, headers: dashboardHeaders };
   } catch (e) {

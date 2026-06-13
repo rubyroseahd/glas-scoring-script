@@ -56,7 +56,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
 
   const totalRows = rows.length;
   let panelAData = brackets.map(b => {
-    const shopCount = rows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]))).length;
+    const shopCount = rows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) || 0)).length;
     const vdmRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch));
     const vdmCount = vdmRows.length;
     
@@ -97,7 +97,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const panelBHeaders = ["Proprietary Strategic Bracket", "GLÄS Current Shopify SKU Count", "GLÄS Current Catalog %", "GLÄS Optimized VDM SKU Count", "GLÄS Optimized VDM Catalog %", "GLÄS Net Weight Shift % (Difference)", "VDM Base Discount %", "Final Stacked Checkout Discount"];
   
   let panelBData = brackets.map(b => {
-    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]))).length;
+    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) || 0)).length;
     const vdmCount = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch)).length;
     
     const shopPct = totalHouseRows > 0 ? shopCount / totalHouseRows : 0;
