@@ -57,9 +57,9 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const totalRows = rows.length;
   let panelAData = brackets.map(b => {
     const shopCount = rows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) || 0)).length;
-    const vdmRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch));
+    const vdmRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]] && r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch));
     const vdmCount = vdmRows.length;
-    
+
     const shopPct = shopCount / totalRows;
     const vdmPct = vdmCount / totalRows;
     const diff = vdmPct - shopPct;
@@ -75,13 +75,12 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     panelAData.reduce((s, r) => s + r[5], 0), "", "", "", ""];
   panelAData.push(panelATotals);
 
+  const panelAWidth = panelAHeaders.length;
   sheet.getRange(1, 1).setValue("GLOBAL CATALOG ALLOCATION SUMMARY MATRIX").setFontSize(14).setFontWeight("bold").setBackground(VDM_CONFIG.DESIGN.PANEL_GLOBAL_BG).setFontColor("#FFFFFF");
-  sheet.getRange(2, 1, 1, 10).setValues([panelAHeaders]);
-  applyHeaderStyle(sheet.getRange(2, 1, 1, 10));
-  sheet.getRange(3, 1, panelAData.length, 10).setValues(panelAData);
-  sheet.getRange(2 + panelAData.length, 1, 1, 10).setFontWeight("bold");
-  
-  // Formatting Percentages for Panel A
+  sheet.getRange(2, 1, 1, panelAWidth).setValues([panelAHeaders]);
+  applyHeaderStyle(sheet.getRange(2, 1, 1, panelAWidth));
+  sheet.getRange(3, 1, panelAData.length, panelAWidth).setValues(panelAData);
+
   [3, 5, 6, 7, 8, 9].forEach(col => {
     sheet.getRange(3, col, panelAData.length, 1).setNumberFormat("0.00%");
   });
@@ -97,7 +96,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const panelBHeaders = ["Proprietary Strategic Bracket", "GLÄS Current Shopify SKU Count", "GLÄS Current Catalog %", "GLÄS Optimized VDM SKU Count", "GLÄS Optimized VDM Catalog %", "GLÄS Net Weight Shift % (Difference)", "VDM Base Discount %", "Final Stacked Checkout Discount"];
   
   let panelBData = brackets.map(b => {
-    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) || 0)).length;
+    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) ?? 0)).length;
     const vdmCount = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch)).length;
     
     const shopPct = totalHouseRows > 0 ? shopCount / totalHouseRows : 0;
@@ -115,14 +114,14 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     panelBData.reduce((s, r) => s + r[5], 0), "", ""];
   panelBData.push(panelBTotals);
 
+  const panelBWidth = panelBHeaders.length;
   const startPanelB = 3 + panelAData.length + 4;
   sheet.getRange(startPanelB, 1).setValue("GLÄS & GLASTOY PROPRIETARY BRAND INSIGHTS PANEL").setFontSize(12).setFontWeight("bold").setBackground(VDM_CONFIG.DESIGN.PANEL_PROPRIETARY_BG).setFontColor("#FFFFFF");
-  sheet.getRange(startPanelB + 1, 1, 1, 8).setValues([panelBHeaders]);
-  applyHeaderStyle(sheet.getRange(startPanelB + 1, 1, 1, 8));
-  sheet.getRange(startPanelB + 2, 1, panelBData.length, 8).setValues(panelBData);
+  sheet.getRange(startPanelB + 1, 1, 1, panelBWidth).setValues([panelBHeaders]);
+  applyHeaderStyle(sheet.getRange(startPanelB + 1, 1, 1, panelBWidth));
+  sheet.getRange(startPanelB + 2, 1, panelBData.length, panelBWidth).setValues(panelBData);
   sheet.getRange(startPanelB + 1 + panelBData.length, 1, 1, 8).setFontWeight("bold");
 
-  // Formatting Percentages for Panel B
   [3, 5, 6, 7, 8].forEach(col => {
     sheet.getRange(startPanelB + 2, col, panelBData.length, 1).setNumberFormat("0.00%");
   });
@@ -171,20 +170,18 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
     ];
   });
 
-  sheet.getRange(1, 1, 1, 11).setValues([headers]);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 11));
+  const width = headers.length;
+  sheet.getRange(1, 1, 1, width).setValues([headers]);
+  applyHeaderStyle(sheet.getRange(1, 1, 1, width));
   if (syncRows.length > 0) {
-    const range = sheet.getRange(2, 1, syncRows.length, 11);
+    const range = sheet.getRange(2, 1, syncRows.length, width);
     range.setValues(syncRows);
-    
-    // Targeted Formatting per One-Pass Plan
-    sheet.getRange(2, 5, syncRows.length, 1).setNumberFormat("0.00%"); // Markdown %
-    [6, 7, 8, 9, 10].forEach(col => sheet.getRange(2, col, syncRows.length, 1).setNumberFormat("0.00")); // Pricing metrics
+    sheet.getRange(2, 5, syncRows.length, 1).setNumberFormat("0.00%");
+    [6, 7, 8, 9, 10].forEach(col => sheet.getRange(2, col, syncRows.length, 1).setNumberFormat("0.00"));
   }
 }
 
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
-  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.MASTER_LEDGER);
   sheet.clear().clearFormats();
 
   // Revised Schema Layer 4 - Financial Sequencing
@@ -207,10 +204,11 @@ function generateMasterLedger(ss, rows, idx, shopifyMap) {
     ];
   });
 
-  sheet.getRange(1, 1, 1, 15).setValues([headers]);
-  applyHeaderStyle(sheet.getRange(1, 1, 1, 15));
+  const width = headers.length;
+  sheet.getRange(1, 1, 1, width).setValues([headers]);
+  applyHeaderStyle(sheet.getRange(1, 1, 1, width));
   if (ledgerRows.length > 0) {
-    const range = sheet.getRange(2, 1, ledgerRows.length, 15);
+    const range = sheet.getRange(2, 1, ledgerRows.length, width);
     range.setValues(ledgerRows);
 
     // Separate dollar formatting from percentage margin fields
