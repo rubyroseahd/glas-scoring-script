@@ -152,7 +152,7 @@ function executeDashboardRefresh() {
 
       stats.total++;
       results.push([
-        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin
+        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin
       ]);
     });
 
@@ -164,7 +164,7 @@ function executeDashboardRefresh() {
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
-    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"];
+    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"];
     
     const headerWidth = dashboardHeaders.length;
     const rowCount = (results && results.length) ? results.length : 0;

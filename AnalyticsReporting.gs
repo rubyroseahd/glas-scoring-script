@@ -216,7 +216,7 @@ function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
     const sku = r[idx["SKU ANCHOR KEY"]];
     const vendor = shopifyMap.get(sku)?.vendor || "Unknown Vendor";
     const stockVal = (safeNum(r[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (safeNum(r[idx["RESOLVED COST BASE"]]) || 0);
-    const units90 = safeNum(r[idx["RETAIL VELOCITY SCORE COMPONENT"]]) || 0; 
+    const units90 = safeNum(r[idx["RAW 90D RETAIL VELOCITY"]]) || 0; 
 
     if (!vendorTotals[vendor]) vendorTotals[vendor] = { skus: 0, stockValue: 0, sales90: 0 };
     vendorTotals[vendor].skus++;
@@ -247,7 +247,7 @@ function logElasticitySnapshot(ss, rows, idx) {
     r[idx["SKU ANCHOR KEY"]],
     r[idx["VDM MARKDOWN DEPTH %"]],
     r[idx["SIMULATED CHECKOUT NET PRICE"]],
-    r[idx["RETAIL VELOCITY SCORE COMPONENT"]]
+    r[idx["RAW 90D RETAIL VELOCITY"]]
   ]);
   
   const snapshotHeaders = ["Snapshot Date", "SKU", "Markdown Depth", "Price", "Velocity"];
@@ -266,9 +266,8 @@ function logElasticitySnapshot(ss, rows, idx) {
 function recoverDashboardState() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dashSheet = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);
-  const data = dashSheet ? dashSheet.getDataRange().getValues() : [];
-  if (data.length < 2) throw new Error("Dashboard data not found. Run full sync first.");
-  return { headers: data[0], rows: data.slice(1) };
+  const data = (dashSheet && dashSheet.getLastRow() > 0) ? dashSheet.getDataRange().getValues() : [];
+  return { headers: (data[0] || []), rows: (data.slice(1) || []) };
 }
 
 function executeFlexibleRefreshProcess() {
