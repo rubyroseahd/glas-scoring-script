@@ -18,13 +18,3 @@ function getOrCreateSheet(sheetName, isHidden = false) {
   }
   return sheet;
 }
-
-/**
- * Formats a currency value for reporting.
- * @param {number} value
- * @return {string}
- */
-function formatCurrency(value) {
-  if (isNaN(value)) return "$0.00";
-  return Utilities.formatString("$%.2f", value);
-}

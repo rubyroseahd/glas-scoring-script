@@ -12,7 +12,7 @@ The VDM Engine uses a **10-point composite scoring model** combining three indep
 
 ## Dimension 1: Retail Velocity Score (0–4)
 
-**Input:** `shopify_90day_sales` — 90-day net units sold per SKU.
+**Input:** `Total sales by product.csv` — 90-day net units sold per SKU.
 
 **Method:** Tie-aware percentile ranking (`PERCENTRANK.INC` style). Percentile is computed across all SKUs with more than 1 unit sold, using interpolated midpoint ranking within tie groups to prevent under-ranking of duplicates.
 
@@ -79,7 +79,7 @@ If `Units90 = 0`, DoS is set to **999** (zero-sales override — no stock pressu
 
 When a WEBONLY SKU scores 0–3, the system applies a two-path decision:
 
-> **90-day total sales = 0** is used as the operational proxy for three consecutive 30-day zero-sales periods, since the `shopify_90day_sales` source provides a single 90-day aggregate figure.
+> **90-day total sales = 0** is used as the operational proxy for three consecutive 30-day zero-sales periods, since the `Total sales by product.csv` source provides a single 90-day aggregate figure.
 
 | Condition | Path | Tier | Markdown |
 |---|---|---|---|
