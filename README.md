@@ -1,80 +1,111 @@
-# glas-scoring-script
+# GLAS Scoring Script
 
-A JavaScript script for GLAS scoring workflows.
+Google Apps Script pricing engine for the **Vendor-Driven Markdown (VDM)** workflow.
 
-## Overview
+This script ingests retail, stock, and cost data, calculates a **10-point composite score per SKU**, maps each SKU to a pricing tier, applies guardrails/overrides, and produces structured outputs for review and execution.
 
-`glas-scoring-script` provides a lightweight scoring utility to process inputs, apply scoring logic, and output score results for downstream use.
+---
 
-## Requirements
+## What the script does
 
-- [Node.js](https://nodejs.org/) 18+ (recommended)
-- npm (comes with Node.js)
+For each SKU, the script:
 
-## Installation
+1. Loads source data (sales, catalog/pricing, warehouse stock, cost waterfall).
+2. Resolves cost and computes current gross margin.
+3. Calculates three dimension scores:
+   - **Velocity** (0–4)
+   - **Margin** (0–3)
+   - **Stock** (0–3)
+4. Sums dimensions into a **composite score (0–10)**.
+5. Maps composite score to a strategic markdown tier.
+6. Applies gatekeeper overrides (for example, GWP or new launch freezes).
+7. Routes outputs into action/review queues.
 
-1. Clone the repository:
+---
 
-   ```bash
-   git clone https://github.com/rubyroseahd/glas-scoring-script.git
-   cd glas-scoring-script
-   ```
+## Scoring model (VDM 10-point)
 
-2. Install dependencies:
+### 1) Velocity Score (0–4)
+Input: `shopify_90day_sales` (90-day units sold)
 
-   ```bash
-   npm install
-   ```
+- **0** = 0 units sold
+- **1** = exactly 1 unit sold
+- **2** = percentile rank < 55th (among SKUs with >1 unit)
+- **3** = percentile rank 55th–79th
+- **4** = percentile rank ≥ 80th
 
-## Usage
+Uses tie-aware percentile ranking (`PERCENTRANK.INC` style midpoint handling).
 
-Run the script with Node.js:
+### 2) Margin Score (0–3)
+Input: gross margin = `(Live Price − Resolved Cost) / Live Price`
 
-```bash
-node index.js
-```
+- **0** = margin < 35%
+- **1** = 35%–44.9%
+- **2** = 45%–54.9%
+- **3** = ≥ 55%
 
-If your entry file is different, replace `index.js` with the appropriate script file.
+### 3) Stock Score (0–3)
+Input: web on-hand stock + sales velocity (for SHARED DoS)
 
-## Project Structure
+- **WEBONLY** → fixed **2**
+- **SHARED**:
+  - **3** = DoS ≤ 30
+  - **2** = DoS 31–120
+  - **1** = DoS 121–180
+  - **0** = DoS > 180
 
-A typical structure may look like:
+DoS formula for SHARED:
 
-```text
-.
-├── index.js
-├── package.json
-└── README.md
-```
+`DoS = Web Stock / (Units90 / 90)`
 
-## Configuration
+If `Units90 = 0`, DoS is set to `999` (zero-sales override).
 
-If the script relies on environment variables or config files, document them here. Example:
+---
 
-```bash
-export INPUT_PATH=./data/input.json
-export OUTPUT_PATH=./data/output.json
-```
+## Composite → Tier mapping
 
-Then run:
+- **10** → Top Hero
+- **8–9** → Signature Hero
+- **6–7** → Proven Performer
+- **4–5** → Accelerator
+- **0–3** (WEBONLY, sales90 = 0) → Clearance / Archive
 
-```bash
-node index.js
-```
+---
 
-## Development
+## Data inputs
 
-- Keep scoring logic modular and testable.
-- Add small fixtures for sample input/output validation.
-- Use linting/formatting tools for consistency.
+Expected source tabs/files include:
 
-## Contributing
+- `shopify_90day_sales` (`_raw_sales`) — 90-day unit velocity
+- `shopify_export_gt.csv` (`_raw_shopify`) — active SKU catalog + live pricing metadata
+- `EEI USA Whse Stock Report.csv` (`_raw_eei_usa`) — USA on-hand + B2B sales context
+- `EEI WEB Whse Stock Report.csv` (`_raw_eei_web`) — web warehouse stock
+- `Cost_Data.csv` (`_raw_cost`) — procurement cost waterfall
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a pull request
+---
 
-## License
+## Operational guardrails
 
-Add your license information here (for example, MIT).
+The script supports gatekeeper holds that override standard tier markdown behavior, including:
+
+- Active GWP promo hold (markdown freeze)
+- New launch hold (markdown freeze)
+
+When a gatekeeper condition is met, pricing action is held regardless of composite score.
+
+---
+
+## Running / maintenance notes
+
+- Built for Google Apps Script operational workflows.
+- Keep source tab names stable (especially `shopify_90day_sales`) to avoid broken mappings.
+- Treat this README as the behavior contract; update it when scoring logic or thresholds change.
+
+---
+
+## Related documentation
+
+- `docs/VDM_Master_Specification.md`
+- `docs/VDM_Scoring_Framework.md`
+
+These docs define the production scoring framework and should stay in sync with script behavior.
