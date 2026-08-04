@@ -14,6 +14,7 @@ function generateAllReports(dashboardState) {
     const idx = getHeaderMap(headers); // Use the standardized helper for Dashboard columns
 
     generateSummaryTab(ss, rows, idx, shopifyMap);
+    generateActionItems(ss, rows, idx, shopifyMap);
     generateSyncAudit(ss, rows, idx, shopifyMap);
     generateMasterLedger(ss, rows, idx, shopifyMap);
     generateSupplierScorecard(ss, rows, idx, shopifyMap);
@@ -144,7 +145,59 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   sheet.getRange(startPanelC + 4, 1, 1, 2).setFontWeight("bold").setBorder(true, null, null, null, null, null);
 }
 
-function generateSyncAudit(ss, rows, idx, shopifyMap) {
+/**
+ * Generates the Action Items & Sign-off tab with Queue 1A/1B/2/3 routing.
+ * Queue 1A: Negative base margin audit
+ * Queue 1B: Simulated checkout margin guardrail (<20%)
+ * Queue 2: WEBONLY digital review (total score 0–3)
+ * Queue 3: SHARED clearance/liquidation (total score 0–3)
+ */
+function generateActionItems(ss, rows, idx, shopifyMap) {
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.ACTION) || ss.insertSheet(VDM_CONFIG.TABS.ACTION);
+  sheet.clear().clearFormats();
+
+  const headers = ["Queue", "SKU", "Handle", "Vendor", "Fulfillment", "Total Score", "Current Margin %", "Stacked Margin %", "Guardrail", "Target Tier", "Proposed Price", "Action Required"];
+  const width = headers.length;
+  sheet.getRange(1, 1, 1, width).setValues([headers]);
+  applyHeaderStyle(sheet.getRange(1, 1, 1, width));
+
+  const actionRows = rows
+    .map(r => {
+      const queue = r[idx["ACTION QUEUE"]] || "";
+      if (!queue) return null;
+      const sku = r[idx["SKU ANCHOR KEY"]];
+      const meta = shopifyMap.get(sku) || {};
+      const curMargin = safeNum(r[idx["CURRENT GROSS MARGIN %"]]) || 0;
+      const stackMargin = safeNum(r[idx["FINAL SIMULATED STACKED MARGIN %"]]) || 0;
+      let actionRequired = "";
+      if (queue.startsWith("Queue 1A")) {
+        actionRequired = "Flag for cost audit — base margin is negative";
+      } else if (queue.startsWith("Queue 1B")) {
+        actionRequired = "Pricing blocked — stacked margin below 20% guardrail";
+      } else if (queue.startsWith("Queue 2")) {
+        actionRequired = "WEBONLY digital review — score 0–3; route to digital clearance or archive";
+      } else if (queue.startsWith("Queue 3")) {
+        actionRequired = "SHARED clearance/liquidation — score 0–3; route to physical clearance channel";
+      }
+      return [
+        queue, sku, meta.handle || "", meta.vendor || "",
+        r[idx["FULFILLMENT TAG"]], r[idx["TOTAL COMPOSITE SCORE"]],
+        curMargin, stackMargin, r[idx["PROFIT GUARDRAIL STATUS ALERT"]],
+        r[idx["TARGET STRATEGIC TIER"]], r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+        actionRequired
+      ];
+    })
+    .filter(r => r !== null);
+
+  if (actionRows.length > 0) {
+    sheet.getRange(2, 1, actionRows.length, width).setValues(actionRows);
+    sheet.getRange(2, 7, actionRows.length, 2).setNumberFormat("0.00%");
+    sheet.getRange(2, 11, actionRows.length, 1).setNumberFormat("0.00");
+  }
+  sheet.setFrozenRows(1);
+}
+
+
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SYNC_AUDIT) || ss.insertSheet(VDM_CONFIG.TABS.SYNC_AUDIT);
   sheet.clear().clearFormats();
 

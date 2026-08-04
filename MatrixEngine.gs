@@ -2,6 +2,32 @@
  * MODULE 3: MATRIX ENGINE
  */
 
+/**
+ * Tie-aware percentile ranking (PERCENTRANK.INC style).
+ * Returns the fraction of values in sortedArr that are <= value,
+ * interpolating within tie groups for fairness.
+ * @param {number[]} sortedArr - Sorted ascending array of numbers.
+ * @param {number} value
+ * @return {number} Percentile rank in [0, 1].
+ */
+function getPercentileRankInc(sortedArr, value) {
+  const n = sortedArr.length;
+  if (n === 0) return 0;
+  if (n === 1) return 1;
+  // Count values strictly less than and strictly greater than value
+  let below = 0;
+  let above = 0;
+  for (let i = 0; i < n; i++) {
+    if (sortedArr[i] < value) below++;
+    else if (sortedArr[i] > value) above++;
+  }
+  // INC interpolation: rank = below / (n - 1) to (n - 1 - above) / (n - 1)
+  // For a tie group, use the midpoint
+  const rankLow = below / (n - 1);
+  const rankHigh = (n - 1 - above) / (n - 1);
+  return (rankLow + rankHigh) / 2;
+}
+
 function executeDashboardRefresh() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -29,7 +55,7 @@ function executeDashboardRefresh() {
     // Load Registries
     const gwpSet = new Set(settingsData.slice(1).map(r => safeStr(r[0]).toUpperCase())); // Skip header row
     const launchSet = new Set(settingsData.slice(1).map(r => safeStr(r[1]).toUpperCase())); // Skip header row
-    const mapBrands = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v); // Skip header row
+    const mapVendors = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v); // Vendor-level MAP only
     const affiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
 
     // Velocity Percentile Setup
@@ -53,7 +79,7 @@ function executeDashboardRefresh() {
       let gate = "None";
       if (gwpSet.has(sku)) gate = "⚠️ Active GWP Promo";
       else if (launchSet.has(sku)) gate = "New Launch";
-      else if (mapBrands.some(b => vendor.includes(b))) gate = "3rd Party MAP";
+      else if (mapVendors.some(b => vendor === b)) gate = "3rd Party MAP"; // Vendor-level match only
 
       const fulfillment = usaMap.has(sku) ? "SHARED" : "WEBONLY";
       const cost = safeNum(costMap.get(sku));
@@ -65,17 +91,16 @@ function executeDashboardRefresh() {
       const curMarkdown = (compareMSRP === price || compareMSRP === 0) ? 0 : (compareMSRP - (price || 0)) / compareMSRP;
       const curMargin = (price === 0 || price === null || cost === null) ? 0 : (price - cost) / price;
       
-      // Velocity Score (I) - Ensure sIdx["Net items sold"] is valid
+      // Velocity Score (I)
       const units90 = safeNum(salesMap.get(sku));
       let vScore = 0;
       if (units90 !== null) {
         if (units90 === 1) {
           vScore = 1;
         } else if (units90 > 1) {
-          const den = salesArray.length - 1;
-          const rank = den > 0 ? salesArray.filter(v => v < units90).length / den : 0;
-          if (rank >= 0.80) vScore = 4;
-          else if (rank >= 0.55) vScore = 3;
+          const pct = getPercentileRankInc(salesArray, units90);
+          if (pct >= 0.80) vScore = 4;
+          else if (pct >= 0.55) vScore = 3;
           else vScore = 2;
         }
       }
@@ -110,6 +135,21 @@ function executeDashboardRefresh() {
       else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; }
       else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; }
       else if (totalScore >= 4) { tier = "Accelerator (50% Off)"; vdmMarkdown = 0.50; }
+      else {
+        // Score 0–3: WEBONLY strategic tier exception
+        if (fulfillment === "WEBONLY") {
+          if ((units90 || 0) === 0) {
+            // 90-day total sales = 0 (used as the operational proxy for three consecutive 30-day zero-sales periods)
+            tier = "Clearance/Archive (65% Off)";
+            vdmMarkdown = 0.65;
+          } else {
+            // Has some sales history — hold at digital review tier
+            tier = "Accelerator / Digital Review (50% Off)";
+            vdmMarkdown = 0.50;
+          }
+        }
+        // SHARED score 0–3: default Clearance/Archive (65%) already set above
+      }
 
       const usaRow = usaMap.get(sku);
       const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA WAREHOUSE ON HAND STOCK"]]) || 0 : 0;
@@ -150,9 +190,25 @@ function executeDashboardRefresh() {
         guardrail = stackMargin < 0.20 ? "❌ BLOCKED" : "✓ SAFE";
       }
 
+      // Queue Assignment
+      // Queue 1A: Negative base margin audit
+      // Queue 1B: Simulated checkout margin guardrail (<20% => ❌ BLOCKED)
+      // Queue 2: WEBONLY digital review (total score 0–3)
+      // Queue 3: SHARED clearance/liquidation (total score 0–3)
+      let actionQueue = "";
+      if (curMargin < 0) {
+        actionQueue = "Queue 1A: ❌ BLOCKED — Negative Base Margin Audit";
+      } else if (guardrail === "❌ BLOCKED") {
+        actionQueue = "Queue 1B: ❌ BLOCKED — Simulated Checkout Margin <20%";
+      } else if (fulfillment === "WEBONLY" && totalScore <= 3) {
+        actionQueue = "Queue 2: WEBONLY Digital Review";
+      } else if (fulfillment === "SHARED" && totalScore <= 3) {
+        actionQueue = "Queue 3: SHARED Clearance / Liquidation";
+      }
+
       stats.total++;
       results.push([
-        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin
+        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin, actionQueue
       ]);
     });
 
@@ -164,7 +220,7 @@ function executeDashboardRefresh() {
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
-    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %"];
+    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue"];
     
     const headerWidth = dashboardHeaders.length;
     const rowCount = (results && results.length) ? results.length : 0;
