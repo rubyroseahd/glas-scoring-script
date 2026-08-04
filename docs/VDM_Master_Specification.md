@@ -14,13 +14,13 @@ The VDM Engine is a Google Apps Script–powered pricing operations system that 
 
 | Source File | Tab Key | Purpose |
 |---|---|---|
-| `shopify_90day_sales` | `_raw_sales` | 90-day retail velocity (units sold) |
+| `Total sales by product.csv` | `_raw_sales` | 90-day retail velocity (units sold) |
 | `shopify_export_gt.csv` | `_raw_shopify` | Active SKU catalog, pricing, vendor metadata |
 | `EEI USA Whse Stock Report.csv` | `_raw_eei_usa` | USA warehouse on-hand stock + 30-day B2B sales |
 | `EEI WEB Whse Stock Report.csv` | `_raw_eei_web` | Web warehouse on-hand stock |
 | `Cost_Data.csv` | `_raw_cost` | Procurement cost waterfall (EEI → Gläs → COTR → Shopify) |
 
-> **Note:** The sales input tab uses the name `shopify_90day_sales` consistently throughout the system.
+> **Note:** The sales input tab uses the file `Total sales by product.csv` consistently throughout the system.
 
 ---
 
@@ -100,7 +100,7 @@ When a WEBONLY SKU scores 0–3:
 - If **90-day total sales = 0** (used as the operational proxy for three consecutive 30-day zero-sales periods), the SKU is eligible for Clearance / Archive at 65% off.
 - If **90-day total sales > 0**, the SKU is held at Accelerator / Digital Review at 50% off for further review before committing to clearance.
 
-> **Operational proxy note:** The system uses 90-day total sales = 0 as the proxy for three consecutive 30-day zero-sales periods, since the source data provides a single 90-day aggregate figure from `shopify_90day_sales`.
+> **Operational proxy note:** The system uses 90-day total sales = 0 as the proxy for three consecutive 30-day zero-sales periods, since the source data provides a single 90-day aggregate figure from `Total sales by product.csv`.
 
 ---
 
@@ -122,7 +122,7 @@ If `Stacked Margin < 20%`, the SKU is flagged **❌ BLOCKED** and routed to **Qu
 
 If a SHARED SKU has:
 - VDM Markdown ≥ 50%
-- USA Warehouse stock ≥ 500 units
+- USA Warehouse stock ≥ **B2B Reserve Min Qty** (Settings column D; defaults to 500 if not configured)
 - 30-day B2B sales > 0
 
 ...then the pricing migration is held at the current live price (`⚠️ HOLD: B2B Volume Stable`) and the tier is changed to **B2B Protection Hold**.

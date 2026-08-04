@@ -197,7 +197,7 @@ function generateActionItems(ss, rows, idx, shopifyMap) {
   sheet.setFrozenRows(1);
 }
 
-
+function generateSyncAudit(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SYNC_AUDIT) || ss.insertSheet(VDM_CONFIG.TABS.SYNC_AUDIT);
   sheet.clear().clearFormats();
 

@@ -47,16 +47,18 @@ function executeDashboardRefresh() {
     const wIdx = webData.length > 0 ? getHeaderMap(webData[0]) : {};
     const cIdx = costData.length > 0 ? getHeaderMap(costData[0]) : {};
 
-    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]), safeNum(r[vIdx["NET ITEMS SOLD"]])]));
-    const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]), r]));
-    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]), safeNum(r[wIdx["EEI WEB WAREHOUSE ON HAND STOCK"]])]));
-    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]), safeNum(r[cIdx["RESOLVED COST"]])]));
+    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[vIdx["NET ITEMS SOLD"]])]));
+    const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), r]));
+    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx["EEI WEB WAREHOUSE ON HAND STOCK"]])]));
+    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[cIdx["RESOLVED COST"]])]));
     
     // Load Registries
     const gwpSet = new Set(settingsData.slice(1).map(r => safeStr(r[0]).toUpperCase())); // Skip header row
     const launchSet = new Set(settingsData.slice(1).map(r => safeStr(r[1]).toUpperCase())); // Skip header row
     const mapVendors = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v); // Vendor-level MAP only
     const affiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
+    // B2B Reserve Min Qty from Settings column D; defaults to 500 if missing or invalid
+    const b2bReserveMin = (settingsData.length > 1 && safeNum(settingsData[1][3]) !== null && safeNum(settingsData[1][3]) > 0) ? safeNum(settingsData[1][3]) : 500;
 
     // Velocity Percentile Setup
     const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
@@ -71,7 +73,7 @@ function executeDashboardRefresh() {
 
     const results = [];
     shopifyData.slice(1).forEach(row => {
-      const sku = row[0];
+      const sku = safeStr(row[0]).toUpperCase(); // Normalize SKU key for consistent map lookups
       const vendor = safeStr(row[sIdx["VENDOR"]]).toUpperCase();
       
       // A: SKU Anchor
@@ -112,7 +114,7 @@ function executeDashboardRefresh() {
       else if (curMargin >= 0.35) mScore = 1;
 
       // Stock Score (K)
-      const webStock = safeNum(webMap.get(sku));
+      const webStock = safeNum(webMap.get(sku)) || 0; // Default null to 0 to prevent NaN in stock arithmetic
       let sScore = 0;
       if (fulfillment === "WEBONLY") {
         sScore = 2;
@@ -129,7 +131,8 @@ function executeDashboardRefresh() {
       // Tiers & Logic (M, N)
       let tier = "Clearance/Archive (65% Off)";
       let vdmMarkdown = 0.65;
-      if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; }
+      if (gate === "⚠️ Active GWP Promo") { tier = "GWP Promo Hold (0% Hold)"; vdmMarkdown = 0; } // GWP: freeze markdown at 0%
+      else if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; }
       else if (gate === "3rd Party MAP") { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; }
       else if (totalScore === 10) { tier = "Top Hero (0% Off)"; vdmMarkdown = 0; }
       else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; }
@@ -178,7 +181,7 @@ function executeDashboardRefresh() {
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
 
       // THE FIX: Intercept the text AND revert the math
-      if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= 500 && b2b30DSales > 0) {
+      if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= b2bReserveMin && b2b30DSales > 0) {
         migration = "⚠️ HOLD: B2B Volume Stable";
         vdmMarkdown = curMarkdown; // Revert markdown to match current live site
         tier = "B2B Protection Hold"; // Change tier name
