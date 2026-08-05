@@ -156,7 +156,7 @@ function executeDashboardRefresh() {
 
       const usaRow = usaMap.get(sku);
       const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA WAREHOUSE ON HAND STOCK"]]) || 0 : 0;
-      const totalStock = usaStock + webStock;
+      const totalStock = (safeNum(usaStock) ?? 0) + (safeNum(webStock) ?? 0);
       if (!usaRow && fulfillment === "SHARED") stats.missingInventory++;
       const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
       let propPrice = compareMSRP * (1 - vdmMarkdown);

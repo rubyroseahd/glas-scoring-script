@@ -206,16 +206,27 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
 
   const syncRows = rows.map(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
+    const handle = shopifyMap.get(sku)?.handle || "";
     const mkdn = safeNum(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     const status = r[idx["PRICING MIGRATION STATUS"]];
-    const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable") ? "NO CHANGE" : "UPDATED";
-    
+    const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable")
+      ? "NO CHANGE"
+      : "UPDATED";
+    const currentMsrp = r[idx["LIVE COMPARE MSRP"]];
+    const nextMsrp = mkdn === 0 ? "" : currentMsrp;
+
     return [
-      sku, shopifyMap.get(sku)?.handle || "", action,
-      r[idx["TARGET STRATEGIC TIER"]], mkdn,
-      r[idx["LIVE STOREFRONT PRICE"]], r[idx["NEW PROPOSED STOREFRONT PRICE"]],
-      r[idx["LIVE COMPARE MSRP"]], mkdn === 0 ? "" : r[idx["LIVE COMPARE MSRP"]],
-      r[idx["LIVE COMPARE MSRP"]], r[idx["GATEKEEPER STATUS"]]
+      sku,
+      handle,
+      action,
+      r[idx["TARGET STRATEGIC TIER"]],
+      mkdn,
+      r[idx["LIVE STOREFRONT PRICE"]],
+      r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+      currentMsrp,
+      nextMsrp,
+      currentMsrp,
+      r[idx["GATEKEEPER STATUS"]]
     ];
   });
 
@@ -228,6 +239,8 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
     sheet.getRange(2, 5, syncRows.length, 1).setNumberFormat("0.00%");
     [6, 7, 8, 9, 10].forEach(col => sheet.getRange(2, col, syncRows.length, 1).setNumberFormat("0.00"));
   }
+
+  return { headers, rows: syncRows };
 }
 
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
