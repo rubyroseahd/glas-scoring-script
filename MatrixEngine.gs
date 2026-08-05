@@ -47,16 +47,21 @@ function executeDashboardRefresh() {
     const wIdx = webData.length > 0 ? getHeaderMap(webData[0]) : {};
     const cIdx = costData.length > 0 ? getHeaderMap(costData[0]) : {};
 
-    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[vIdx["NET ITEMS SOLD"]])]));
+    const salesValueHeader = vIdx["NET QUANTITY"] !== undefined ? "NET QUANTITY" : "NET ITEMS SOLD";
+    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[vIdx[salesValueHeader]])]));
     const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), r]));
-    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx["EEI WEB WAREHOUSE ON HAND STOCK"]])]));
+    const webStockHeader = wIdx["QTY"] !== undefined ? "QTY" : "EEI WEB WAREHOUSE ON HAND STOCK";
+    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx[webStockHeader]])]));
     const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[cIdx["RESOLVED COST"]])]));
     
     // Load Registries
     const gwpSet = new Set(settingsData.slice(1).map(r => safeStr(r[0]).toUpperCase())); // Skip header row
     const launchSet = new Set(settingsData.slice(1).map(r => safeStr(r[1]).toUpperCase())); // Skip header row
     const mapVendors = settingsData.slice(1).map(r => safeStr(r[2]).toUpperCase()).filter(v => v); // Vendor-level MAP only
-    const affiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15; // Fallback to 15%
+    const configuredAffiliateRate = settingsData.length > 1 ? safeNum(settingsData[1][4]) : null;
+    const affiliateRate = configuredAffiliateRate !== null && configuredAffiliateRate >= 0 && configuredAffiliateRate < 1
+      ? configuredAffiliateRate
+      : VDM_CONFIG.AFFILIATE_RATE_DEFAULT;
     // B2B Reserve Min Qty from Settings column D; defaults to 500 if missing or invalid
     const b2bReserveMin = (settingsData.length > 1 && safeNum(settingsData[1][3]) !== null && safeNum(settingsData[1][3]) > 0) ? safeNum(settingsData[1][3]) : 500;
 
@@ -67,8 +72,11 @@ function executeDashboardRefresh() {
     const stats = {
       total: 0,
       missingCost: 0,
+      negativeMarginAudits: 0,
       missingInventory: 0,
-      blockedByMargin: 0
+      blockedByMargin: 0,
+      b2bHolds: 0,
+      fulfillmentFallbackCount: 0
     };
 
     const results = [];
@@ -79,14 +87,15 @@ function executeDashboardRefresh() {
       // A: SKU Anchor
       // B: Gatekeeper
       let gate = "None";
-      if (gwpSet.has(sku)) gate = "⚠️ Active GWP Promo";
-      else if (launchSet.has(sku)) gate = "New Launch";
-      else if (mapVendors.some(b => vendor === b)) gate = "3rd Party MAP"; // Vendor-level match only
+      let gateCode = GATEKEEPER_CODES.NONE;
+      if (gwpSet.has(sku)) { gate = "⚠️ Active GWP Promo"; gateCode = GATEKEEPER_CODES.GWP; }
+      else if (launchSet.has(sku)) { gate = "New Launch"; gateCode = GATEKEEPER_CODES.NEW_LAUNCH; }
+      else if (mapVendors.some(b => vendor === b)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
 
-      const fulfillment = usaMap.has(sku) ? "SHARED" : "WEBONLY";
+      const fulfillment = safeStr(row[sIdx["FULFILLMENT TYPE"]]).toUpperCase() || "SHARED";
+      if (!safeStr(row[sIdx["FULFILLMENT TYPE"]])) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx["VARIANT PRICE"]]);
-      if (cost === null) stats.missingCost++;
       const rawCompare = safeNum(row[sIdx["VARIANT COMPARE AT PRICE"]]);
       
       const compareMSRP = (rawCompare === 0 || rawCompare === null) ? (price || 0) : rawCompare;
@@ -131,13 +140,14 @@ function executeDashboardRefresh() {
       // Tiers & Logic (M, N)
       let tier = "Clearance/Archive (65% Off)";
       let vdmMarkdown = 0.65;
+      let tierCode = TIER_CODES.CLEARANCE;
       if (gate === "⚠️ Active GWP Promo") { tier = "GWP Promo Hold (0% Hold)"; vdmMarkdown = 0; } // GWP: freeze markdown at 0%
       else if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; }
       else if (gate === "3rd Party MAP") { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; }
-      else if (totalScore === 10) { tier = "Top Hero (0% Off)"; vdmMarkdown = 0; }
-      else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; }
-      else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; }
-      else if (totalScore >= 4) { tier = "Accelerator (50% Off)"; vdmMarkdown = 0.50; }
+      else if (totalScore === 10) { tier = "Top Hero (0% Off)"; vdmMarkdown = 0; tierCode = TIER_CODES.TOP_HERO; }
+      else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; tierCode = TIER_CODES.SIG_HERO; }
+      else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; tierCode = TIER_CODES.PROVEN; }
+      else if (totalScore >= 4) { tier = "Accelerator (50% Off)"; vdmMarkdown = 0.50; tierCode = TIER_CODES.ACCELERATOR; }
       else {
         // Score 0–3: WEBONLY strategic tier exception
         if (fulfillment === "WEBONLY") {
@@ -155,7 +165,8 @@ function executeDashboardRefresh() {
       }
 
       const usaRow = usaMap.get(sku);
-      const usaStock = usaRow ? safeNum(usaRow[uIdx["EEI USA WAREHOUSE ON HAND STOCK"]]) || 0 : 0;
+      const usaStockHeader = uIdx["QTY"] !== undefined ? "QTY" : "EEI USA WAREHOUSE ON HAND STOCK";
+      const usaStock = usaRow ? safeNum(usaRow[uIdx[usaStockHeader]]) || 0 : 0;
       const totalStock = (safeNum(usaStock) ?? 0) + (safeNum(webStock) ?? 0);
       if (!usaRow && fulfillment === "SHARED") stats.missingInventory++;
       const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
@@ -164,13 +175,21 @@ function executeDashboardRefresh() {
       
       let stackMargin = 0;
       let guardrail = "✓ SAFE";
+      let guardrailCode = GUARDRAIL_CODES.SAFE;
+      const isCostMissing = (cost === null || cost === 0) && gateCode !== GATEKEEPER_CODES.GWP;
 
-      if (cost === null) {
-        guardrail = "DATA_ERROR";
+      if (isCostMissing) {
+        guardrail = "❌ BLOCKED (Missing Cost)";
+        guardrailCode = GUARDRAIL_CODES.ERR_MISSING_COST;
+      } else if (curMargin < 0) {
+        guardrail = "❌ BLOCKED (Negative Base Margin)";
+        guardrailCode = GUARDRAIL_CODES.ERR_NEGATIVE_MARGIN;
       } else if (mathGuard(simNet, cost)) {
         stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
-        if (stackMargin < 0.20) guardrail = "❌ BLOCKED";
-        if (guardrail === "❌ BLOCKED") stats.blockedByMargin++;
+        if (stackMargin < VDM_CONFIG.PROFIT_FLOOR_GUARDRAIL) {
+          guardrail = "❌ BLOCKED (Margin Floor Violator)";
+          guardrailCode = GUARDRAIL_CODES.ERR_MARGIN_FLOOR_VIOLATOR;
+        }
       }
       
       const curTierLabel = curMarkdown === 0 ? "Full MSRP" : (curMarkdown <= 0.19 ? "Promo Tier 1 (10-15%)" : (curMarkdown <= 0.35 ? "Promo Tier 2 (20-25%)" : (curMarkdown <= 0.55 ? "Promo Tier 3 (40-50%)" : "Clearance")));
@@ -181,16 +200,17 @@ function executeDashboardRefresh() {
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
 
       // THE FIX: Intercept the text AND revert the math
-      if (fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= b2bReserveMin && b2b30DSales > 0) {
+      const b2bHoldActive = fulfillment === "SHARED" && (vdmMarkdown >= 0.50) && usaStock >= b2bReserveMin && b2b30DSales > 0;
+      if (guardrailCode === GUARDRAIL_CODES.SAFE && b2bHoldActive) {
         migration = "⚠️ HOLD: B2B Volume Stable";
         vdmMarkdown = curMarkdown; // Revert markdown to match current live site
         tier = "B2B Protection Hold"; // Change tier name
+        guardrail = "⚠️ B2B HOLD";
+        guardrailCode = GUARDRAIL_CODES.WARN_B2B_HOLD;
         
-        // Recalculate safe pricing
         propPrice = compareMSRP * (1 - vdmMarkdown);
         simNet = propPrice * (1 - affiliateRate);
         stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
-        guardrail = stackMargin < 0.20 ? "❌ BLOCKED" : "✓ SAFE";
       }
 
       // Queue Assignment
@@ -199,10 +219,17 @@ function executeDashboardRefresh() {
       // Queue 2: WEBONLY digital review (total score 0–3)
       // Queue 3: SHARED clearance/liquidation (total score 0–3)
       let actionQueue = "";
-      if (curMargin < 0) {
+      if (guardrailCode === GUARDRAIL_CODES.ERR_MISSING_COST) {
+        actionQueue = "Queue 1A: Data Error (Missing Cost)";
+        stats.missingCost++;
+      } else if (guardrailCode === GUARDRAIL_CODES.ERR_NEGATIVE_MARGIN) {
         actionQueue = "Queue 1A: ❌ BLOCKED — Negative Base Margin Audit";
-      } else if (guardrail === "❌ BLOCKED") {
+        stats.negativeMarginAudits++;
+      } else if (guardrailCode === GUARDRAIL_CODES.ERR_MARGIN_FLOOR_VIOLATOR) {
         actionQueue = "Queue 1B: ❌ BLOCKED — Simulated Checkout Margin <20%";
+        stats.blockedByMargin++;
+      } else if (guardrailCode === GUARDRAIL_CODES.WARN_B2B_HOLD) {
+        stats.b2bHolds++;
       } else if (fulfillment === "WEBONLY" && totalScore <= 3) {
         actionQueue = "Queue 2: WEBONLY Digital Review";
       } else if (fulfillment === "SHARED" && totalScore <= 3) {
@@ -216,10 +243,13 @@ function executeDashboardRefresh() {
     });
 
     // Log Data Health Results
-    Logger.log(`[SYNC COMPLETE] Processed ${stats.total} SKUs.`);
+    Logger.log(`[SYNC COMPLETE ${VDM_CONFIG.VERSION}] Processed ${stats.total} SKUs.`);
     if (stats.missingCost > 0) Logger.log(`[WARN] ${stats.missingCost} SKUs are missing cost data (Waterfall failed).`);
+    if (stats.negativeMarginAudits > 0) Logger.log(`[WARN] ${stats.negativeMarginAudits} SKUs have negative base margin.`);
     if (stats.missingInventory > 0) Logger.log(`[WARN] ${stats.missingInventory} SHARED SKUs missing from USA Warehouse file.`);
     if (stats.blockedByMargin > 0) Logger.log(`[INFO] ${stats.blockedByMargin} SKUs blocked from target discount by profit guardrails.`);
+    if (stats.b2bHolds > 0) Logger.log(`[INFO] ${stats.b2bHolds} SKUs held for B2B reserve protection.`);
+    if (stats.fulfillmentFallbackCount > 0) Logger.log(`[WARN] ${stats.fulfillmentFallbackCount} SKUs used fulfillment type fallback.`);
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
@@ -242,7 +272,7 @@ function executeDashboardRefresh() {
     }
     dashSheet.setFrozenRows(1);
 
-    return { rows: results, headers: dashboardHeaders };
+    return { rows: results, headers: dashboardHeaders, stats };
   } catch (e) {
     logError("MatrixEngine", e);
     throw e;

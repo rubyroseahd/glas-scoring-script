@@ -343,7 +343,17 @@ function executeFlexibleRefreshProcess() {
     runDataIngestion();
     const dashboardState = executeDashboardRefresh();
     generateAllReports(dashboardState);
-    ui.alert("Full VDM System Sync Complete.");
+    const stats = dashboardState.stats || {};
+    ui.alert(
+      "🎉 VDM Refresh Complete! (Engine Version: " + VDM_CONFIG.VERSION + ")\n\n" +
+      "• Processed Active SKUs: " + (stats.total || 0) + "\n" +
+      "• Queue 1A Missing Cost Errors: " + (stats.missingCost || 0) + "\n" +
+      "• Queue 1A Negative Margin Audits: " + (stats.negativeMarginAudits || 0) + "\n" +
+      "• Queue 1B Margin Floor Violators (<20%): " + (stats.blockedByMargin || 0) + "\n" +
+      "• B2B Reserve Holds: " + (stats.b2bHolds || 0) + "\n" +
+      "• Unmapped SHARED Physical Stock: " + (stats.missingInventory || 0) + "\n" +
+      "• Fulfillment Type Fallbacks: " + (stats.fulfillmentFallbackCount || 0)
+    );
   } catch (e) {
     ui.alert("Process Failed: " + e.message);
   }
