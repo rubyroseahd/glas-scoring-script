@@ -206,16 +206,27 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
 
   const syncRows = rows.map(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
+    const handle = shopifyMap.get(sku)?.handle || "";
     const mkdn = safeNum(r[idx["VDM MARKDOWN DEPTH %"]]) || 0;
     const status = r[idx["PRICING MIGRATION STATUS"]];
-    const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable") ? "NO CHANGE" : "UPDATED";
-    
+    const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable")
+      ? "NO CHANGE"
+      : "UPDATED";
+    const currentMsrp = r[idx["LIVE COMPARE MSRP"]];
+    const nextMsrp = mkdn === 0 ? "" : currentMsrp;
+
     return [
-      sku, shopifyMap.get(sku)?.handle || "", action,
-      r[idx["TARGET STRATEGIC TIER"]], mkdn,
-      r[idx["LIVE STOREFRONT PRICE"]], r[idx["NEW PROPOSED STOREFRONT PRICE"]],
-      r[idx["LIVE COMPARE MSRP"]], mkdn === 0 ? "" : r[idx["LIVE COMPARE MSRP"]],
-      r[idx["LIVE COMPARE MSRP"]], r[idx["GATEKEEPER STATUS"]]
+      sku,
+      handle,
+      action,
+      r[idx["TARGET STRATEGIC TIER"]],
+      mkdn,
+      r[idx["LIVE STOREFRONT PRICE"]],
+      r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+      currentMsrp,
+      nextMsrp,
+      currentMsrp,
+      r[idx["GATEKEEPER STATUS"]]
     ];
   });
 
@@ -228,6 +239,8 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
     sheet.getRange(2, 5, syncRows.length, 1).setNumberFormat("0.00%");
     [6, 7, 8, 9, 10].forEach(col => sheet.getRange(2, col, syncRows.length, 1).setNumberFormat("0.00"));
   }
+
+  return { headers, rows: syncRows };
 }
 
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
@@ -330,7 +343,17 @@ function executeFlexibleRefreshProcess() {
     runDataIngestion();
     const dashboardState = executeDashboardRefresh();
     generateAllReports(dashboardState);
-    ui.alert("Full VDM System Sync Complete.");
+    const stats = dashboardState.stats || {};
+    ui.alert(
+      "🎉 VDM Refresh Complete! (Engine Version: " + VDM_CONFIG.VERSION + ")\n\n" +
+      "• Processed Active SKUs: " + (stats.total || 0) + "\n" +
+      "• Queue 1A Missing Cost Errors: " + (stats.missingCost || 0) + "\n" +
+      "• Queue 1A Negative Margin Audits: " + (stats.negativeMarginAudits || 0) + "\n" +
+      "• Queue 1B Margin Floor Violators (<20%): " + (stats.blockedByMargin || 0) + "\n" +
+      "• B2B Reserve Holds: " + (stats.b2bHolds || 0) + "\n" +
+      "• Unmapped SHARED Physical Stock: " + (stats.missingInventory || 0) + "\n" +
+      "• Fulfillment Type Fallbacks: " + (stats.fulfillmentFallbackCount || 0)
+    );
   } catch (e) {
     ui.alert("Process Failed: " + e.message);
   }

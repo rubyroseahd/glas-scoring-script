@@ -1,9 +1,12 @@
 /**
  * MODULE 1: GLOBAL ENVIRONMENT & SYSTEM VARIABLES MATRIX
- * System Version: 2.5.0 (Enterprise Production Locked)
+ * System Version: 3.0.0-PROD
  */
 
 const VDM_CONFIG = {
+  VERSION: "3.0.0-PROD",
+  AFFILIATE_RATE_DEFAULT: 0.15,
+  PROFIT_FLOOR_GUARDRAIL: 0.20,
   FOLDER_ID: "1m1BoV4XOYoHSCu1QeOOddmcOdNLUGdlh",
   
   SOURCE_FILES: {
@@ -18,7 +21,7 @@ const VDM_CONFIG = {
     // User-Facing
     BRIEF: "[00] Executive Brief", 
     ACTION: "[00] Action Items & Sign-off",
-    SETTINGS: "[01] Settings & Registries",
+    SETTINGS: "[01] Control Panel",
     DASHBOARD: "[02] Dashboard Matrix", 
     SUMMARY: "[03] Tier Summary & Distribution Panel", 
     SCORECARD: "[01] Supplier Scorecard & Capital Velocity", 
@@ -26,13 +29,13 @@ const VDM_CONFIG = {
     SYNC_AUDIT: "[07] Storefront Update & Sync Audit",
     MASTER_LEDGER: "[09] Master Pricing & Margin Ledger",
     
-    // Hidden Ingestion
-    RAW_SHOPIFY: "_raw_shopify",
-    RAW_EEI_USA: "_raw_eei_usa",
-    RAW_EEI_WEB: "_raw_eei_web",
-    RAW_SALES: "_raw_sales",
-    RAW_COST: "_raw_cost",
-    MASTER_COST: "_resolved_cost_base",
+    // Workbook ingestion tabs
+    RAW_SHOPIFY: "shopify_export",
+    RAW_EEI_USA: "eei_usa_whse",
+    RAW_EEI_WEB: "eei_web_whse",
+    RAW_SALES: "shopify_90day_sales",
+    RAW_COST: "cost_ledger",
+    MASTER_COST: "cost_ledger",
     BACKUP: "_backup_matrix_data"
   },
 
@@ -53,12 +56,45 @@ const VDM_CONFIG = {
 
   // Header String Registry for dynamic matching
   HEADERS: {
-    SHOPIFY: ["VARIANT SKU", "HANDLE", "STATUS", "VARIANT PRICE", "VARIANT COMPARE AT PRICE", "VENDOR", "VARIANT INVENTORY QTY", "COST PER ITEM"],
-    USA_WAREHOUSE: ["ITEM CODE", "EEI USA WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
-    WEB_WAREHOUSE: ["ITEM CODE", "EEI WEB WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
-    RETAIL_VELOCITY: ["PRODUCT VARIANT SKU", "NET ITEMS SOLD"],
-    COST_WATERFALL: ["SKU", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE"]
+    SHOPIFY: ["VARIANT SKU", "HANDLE", "STATUS", "VARIANT PRICE", "VARIANT COMPARE AT PRICE", "VENDOR", "VARIANT INVENTORY QTY", "COST PER ITEM", "TYPE", "PRODUCT TYPE"],
+    USA_WAREHOUSE: ["ITEM CODE", "SKU", "QTY", "QUANTITY", "EEI USA WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
+    WEB_WAREHOUSE: ["ITEM CODE", "SKU", "QTY", "QUANTITY", "EEI WEB WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
+    RETAIL_VELOCITY: ["PRODUCT VARIANT SKU", "VARIANT SKU", "SKU", "NET QUANTITY", "NET ITEMS SOLD", "QTY"],
+    COST_WATERFALL: ["SKU", "VARIANT SKU", "COST", "UNIT COST", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE"]
   }
+};
+
+const GUARDRAIL_CODES = {
+  SAFE: "SAFE",
+  ERR_MISSING_COST: "ERR_MISSING_COST",
+  ERR_NEGATIVE_MARGIN: "ERR_NEGATIVE_MARGIN",
+  ERR_MARGIN_FLOOR_VIOLATOR: "ERR_MARGIN_FLOOR_VIOLATOR",
+  WARN_B2B_HOLD: "WARN_B2B_HOLD"
+};
+
+const TIER_CODES = {
+  GATEKEEPER: "TIER_00_GATEKEEPER",
+  TOP_HERO: "TIER_10_TOP_HERO",
+  SIG_HERO: "TIER_08_SIG_HERO",
+  PROVEN: "TIER_06_PROVEN_PERFORMER",
+  ACCELERATOR: "TIER_04_ACCELERATOR",
+  CLEARANCE: "TIER_00_CLEARANCE"
+};
+
+const GATEKEEPER_CODES = {
+  GWP: "GK_GWP",
+  NEW_LAUNCH: "GK_NEW_LAUNCH",
+  MAP: "GK_MAP",
+  NONE: "NONE"
+};
+
+const QUEUE_CODES = {
+  QUEUE_1A_COST: "Q1A_MISSING_COST",
+  QUEUE_1A_MARGIN: "Q1A_NEGATIVE_MARGIN",
+  QUEUE_1B_FLOOR: "Q1B_MARGIN_FLOOR",
+  QUEUE_2_WEBONLY: "Q2_WEBONLY_REVIEW",
+  QUEUE_3_CLEARANCE: "Q3_SHARED_CLEARANCE",
+  NONE: "NONE"
 };
 
 function logError(module, error) {

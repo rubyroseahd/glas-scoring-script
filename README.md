@@ -26,7 +26,7 @@ For each SKU, the script:
 ## Scoring model (VDM 10-point)
 
 ### 1) Velocity Score (0–4)
-Input: `shopify_90day_sales` (90-day units sold)
+Input: `Total sales by product.csv` (ingested into the `shopify_90day_sales` tab for 90-day units sold)
 
 - **0** = 0 units sold
 - **1** = exactly 1 unit sold
@@ -74,13 +74,13 @@ If `Units90 = 0`, DoS is set to `999` (zero-sales override).
 
 ## Data inputs
 
-Expected source tabs/files include:
+Expected source files and workbook tabs include:
 
-- `shopify_90day_sales` (`_raw_sales`) — 90-day unit velocity
-- `shopify_export_gt.csv` (`_raw_shopify`) — active SKU catalog + live pricing metadata
-- `EEI USA Whse Stock Report.csv` (`_raw_eei_usa`) — USA on-hand + B2B sales context
-- `EEI WEB Whse Stock Report.csv` (`_raw_eei_web`) — web warehouse stock
-- `Cost_Data.csv` (`_raw_cost`) — procurement cost waterfall
+- `Total sales by product.csv` → `shopify_90day_sales` — 90-day unit velocity
+- `shopify_export_gt.csv` → `shopify_export` — active SKU catalog + live pricing metadata
+- `EEI USA Whse Stock Report.csv` → `eei_usa_whse` — USA on-hand + B2B sales context
+- `EEI WEB Whse Stock Report.csv` → `eei_web_whse` — web warehouse stock
+- `Cost_Data.csv` → `cost_ledger` — procurement cost waterfall
 
 ---
 
@@ -98,7 +98,7 @@ When a gatekeeper condition is met, pricing action is held regardless of composi
 ## Running / maintenance notes
 
 - Built for Google Apps Script operational workflows.
-- Keep source tab names stable (especially `shopify_90day_sales`) to avoid broken mappings.
+- Keep workbook tab names stable (especially `shopify_90day_sales` for `Total sales by product.csv`) to avoid broken mappings.
 - Treat this README as the behavior contract; update it when scoring logic or thresholds change.
 
 ---

@@ -2,6 +2,25 @@
 **Version:** 3.0.0 — Production Locked  
 **System:** Vendor-Driven Markdown (VDM) Pricing Engine
 
+## Machine Code Taxonomy
+
+- Guardrail Codes: `SAFE`, `ERR_MISSING_COST`, `ERR_NEGATIVE_MARGIN`, `ERR_MARGIN_FLOOR_VIOLATOR`, `WARN_B2B_HOLD`
+- Tier Codes: `TIER_00_GATEKEEPER`, `TIER_10_TOP_HERO`, `TIER_08_SIG_HERO`, `TIER_06_PROVEN_PERFORMER`, `TIER_04_ACCELERATOR`, `TIER_00_CLEARANCE`
+- Gatekeeper Codes: `GK_GWP`, `GK_NEW_LAUNCH`, `GK_MAP`, `NONE`
+- Queue Codes: `Q1A_MISSING_COST`, `Q1A_NEGATIVE_MARGIN`, `Q1B_MARGIN_FLOOR`, `Q2_WEBONLY_REVIEW`, `Q3_SHARED_CLEARANCE`, `NONE`
+
+## Ingestion File-to-Tab Mapping
+
+- `Total sales by product.csv` → `shopify_90day_sales`
+- `shopify_export_gt.csv` → `shopify_export`
+- `Cost_Data.csv` → `cost_ledger`
+- `EEI WEB Whse Stock Report.csv` → `eei_web_whse`
+- `EEI USA Whse Stock Report.csv` → `eei_usa_whse`
+
+Required sales-tab failure messaging:
+
+`REQUIRED TAB MISSING: Tab 'shopify_90day_sales' is missing or empty. Please ensure 'Total sales by product.csv' has been imported into the workbook.`
+
 ---
 
 ## Scoring Model Summary
@@ -134,6 +153,8 @@ Queues are evaluated in priority order — a SKU can only be in one queue.
 | 2 | **Queue 1B** | Simulated stacked margin < 20% | ❌ BLOCKED — Checkout margin guardrail |
 | 3 | **Queue 2** | WEBONLY + Score 0–3 | WEBONLY digital review |
 | 4 | **Queue 3** | SHARED + Score 0–3 | SHARED clearance / liquidation |
+
+Guardrail precedence: Missing Cost Error > Negative Base Margin > Margin Floor Violator (<20%) > B2B Reserve Hold > Safe.
 
 ---
 

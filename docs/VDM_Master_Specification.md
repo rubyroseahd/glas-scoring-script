@@ -12,15 +12,15 @@ The VDM Engine is a Google Apps Script–powered pricing operations system that 
 
 ## 2. Data Sources
 
-| Source File | Tab Key | Purpose |
+| Source File | Workbook Tab | Purpose |
 |---|---|---|
-| `Total sales by product.csv` | `_raw_sales` | 90-day retail velocity (units sold) |
-| `shopify_export_gt.csv` | `_raw_shopify` | Active SKU catalog, pricing, vendor metadata |
-| `EEI USA Whse Stock Report.csv` | `_raw_eei_usa` | USA warehouse on-hand stock + 30-day B2B sales |
-| `EEI WEB Whse Stock Report.csv` | `_raw_eei_web` | Web warehouse on-hand stock |
-| `Cost_Data.csv` | `_raw_cost` | Procurement cost waterfall (EEI → Gläs → COTR → Shopify) |
+| `Total sales by product.csv` | `shopify_90day_sales` | 90-day retail velocity (units sold) |
+| `shopify_export_gt.csv` | `shopify_export` | Active SKU catalog, pricing, vendor metadata |
+| `EEI USA Whse Stock Report.csv` | `eei_usa_whse` | USA warehouse on-hand stock + 30-day B2B sales |
+| `EEI WEB Whse Stock Report.csv` | `eei_web_whse` | Web warehouse on-hand stock |
+| `Cost_Data.csv` | `cost_ledger` | Procurement cost waterfall (EEI → Gläs → COTR → Shopify) |
 
-> **Note:** The sales input tab uses the file `Total sales by product.csv` consistently throughout the system.
+> **Note:** `Total sales by product.csv` must be imported into the `shopify_90day_sales` workbook tab.
 
 ---
 
@@ -138,7 +138,7 @@ If a SHARED SKU has:
 | **Queue 2** | WEBONLY + Total Score 0–3 | Route to WEBONLY digital review; evaluate clearance vs. hold |
 | **Queue 3** | SHARED + Total Score 0–3 | Route to SHARED clearance/liquidation channel |
 
-Queue 1A is evaluated first (takes precedence), followed by Queue 1B, then Queue 2/3.
+Queue 1A missing-cost errors take precedence, followed by Queue 1A negative-margin audits, Queue 1B margin floor violations, B2B reserve holds, then Queue 2/3.
 
 ---
 
