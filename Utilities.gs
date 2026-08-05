@@ -32,7 +32,7 @@ function isMapVendorMatch(vendor, registeredVendors) {
 
   return normalizedRegisteredVendors.some(name => {
     if (name.length < 4) return false;
-    return new RegExp("(^|\\s)" + escapeRegExp(name) + "($|\\s)").test(normalizedVendor);
+    return new RegExp("(^|\\W)" + escapeRegExp(name) + "($|\\W)").test(normalizedVendor);
   });
 }
 

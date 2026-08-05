@@ -125,9 +125,9 @@ function executeDashboardRefresh() {
       let tier = "Clearance/Archive (65% Off)";
       let vdmMarkdown = 0.65;
       let tierCode = TIER_CODES.CLEARANCE;
-      if (gate === "⚠️ Active GWP Promo") { tier = "GWP Promo Hold (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; } // GWP: freeze markdown at 0%
-      else if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; }
-      else if (gate === "3rd Party MAP") { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; }
+      if (gateCode === GATEKEEPER_CODES.GWP) { tier = "GWP Promo Hold (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; } // GWP: freeze markdown at 0%
+      else if (gateCode === GATEKEEPER_CODES.NEW_LAUNCH) { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; }
+      else if (gateCode === GATEKEEPER_CODES.MAP) { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; }
       else if (totalScore === 10) { tier = "Top Hero (0% Off)"; vdmMarkdown = 0; tierCode = TIER_CODES.TOP_HERO; }
       else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; tierCode = TIER_CODES.SIG_HERO; }
       else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; tierCode = TIER_CODES.PROVEN; }
@@ -245,6 +245,7 @@ function executeDashboardRefresh() {
     const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Gatekeeper Code", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "Tier Code", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Guardrail Code", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue", "Queue Code"];
     
     const headerWidth = dashboardHeaders.length;
+    const guardrailColumnIndex = dashboardHeaders.indexOf("Profit Guardrail Status Alert") + 1;
     const rowCount = (results && results.length) ? results.length : 0;
     const headerRange = dashSheet.getRange(1, 1, 1, headerWidth);
     headerRange.setValues([dashboardHeaders]);
@@ -252,7 +253,7 @@ function executeDashboardRefresh() {
     if (rowCount > 0) {
       dashSheet.getRange(2, 1, rowCount, headerWidth).setValues(results);
       dashSheet.getRange(2, 1, rowCount, 1).setNumberFormat("@");
-      applyConditionalFormatting(dashSheet, rowCount, headerWidth);
+      applyConditionalFormatting(dashSheet, rowCount, headerWidth, guardrailColumnIndex);
 
       // Automated Recovery Point Sync
       const backupSheet = getOrCreateSheet(VDM_CONFIG.TABS.BACKUP, true);
@@ -268,13 +269,14 @@ function executeDashboardRefresh() {
   }
 }
 
-function applyConditionalFormatting(sheet, rowCount, colCount) {
+function applyConditionalFormatting(sheet, rowCount, colCount, guardrailColumnIndex) {
   const range = sheet.getRange(2, 1, rowCount, colCount);
   sheet.clearConditionalFormatRules();
+  const guardrailColumnLetter = columnToLetter(guardrailColumnIndex);
   
   const rules = [
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=$V2="❌ BLOCKED"')
+      .whenFormulaSatisfied(`=REGEXMATCH($${guardrailColumnLetter}2,"^❌ BLOCKED")`)
       .setBackground(VDM_CONFIG.DESIGN.ALERT_BREACH_BG)
       .setFontColor(VDM_CONFIG.DESIGN.ALERT_BREACH_TEXT)
       .setBold(true)
@@ -291,4 +293,15 @@ function applyConditionalFormatting(sheet, rowCount, colCount) {
       .setRanges([range]).build()
   ];
   sheet.setConditionalFormatRules(rules);
+}
+
+function columnToLetter(column) {
+  let index = column;
+  let letter = "";
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    index = Math.floor((index - 1) / 26);
+  }
+  return letter;
 }
