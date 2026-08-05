@@ -2,30 +2,8 @@
  * MODULE 3: MATRIX ENGINE
  */
 
-/**
- * Tie-aware percentile ranking (PERCENTRANK.INC style).
- * Returns the fraction of values in sortedArr that are <= value,
- * interpolating within tie groups for fairness.
- * @param {number[]} sortedArr - Sorted ascending array of numbers.
- * @param {number} value
- * @return {number} Percentile rank in [0, 1].
- */
-function getPercentileRankInc(sortedArr, value) {
-  const n = sortedArr.length;
-  if (n === 0) return 0;
-  if (n === 1) return 1;
-  // Count values strictly less than and strictly greater than value
-  let below = 0;
-  let above = 0;
-  for (let i = 0; i < n; i++) {
-    if (sortedArr[i] < value) below++;
-    else if (sortedArr[i] > value) above++;
-  }
-  // INC interpolation: rank = below / (n - 1) to (n - 1 - above) / (n - 1)
-  // For a tie group, use the midpoint
-  const rankLow = below / (n - 1);
-  const rankHigh = (n - 1 - above) / (n - 1);
-  return (rankLow + rankHigh) / 2;
+function isZeroCostPermitted(gatekeeperCode) {
+  return gatekeeperCode === GATEKEEPER_CODES.GWP;
 }
 
 function executeDashboardRefresh() {
@@ -53,6 +31,12 @@ function executeDashboardRefresh() {
     const webStockHeader = wIdx["QTY"] !== undefined ? "QTY" : "EEI WEB WAREHOUSE ON HAND STOCK";
     const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx[webStockHeader]])]));
     const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[cIdx["RESOLVED COST"]])]));
+    const catalogSkuSet = new Set(
+      shopifyData.slice(1).map(r => safeStr(r[0]).toUpperCase()).filter(Boolean)
+    );
+    const unmappedPhysicalSkus = new Set(
+      [...Array.from(usaMap.keys()), ...Array.from(webMap.keys())].filter(sku => !catalogSkuSet.has(sku))
+    );
     
     // Load Registries
     const gwpSet = new Set(settingsData.slice(1).map(r => safeStr(r[0]).toUpperCase())); // Skip header row
@@ -73,7 +57,7 @@ function executeDashboardRefresh() {
       total: 0,
       missingCost: 0,
       negativeMarginAudits: 0,
-      missingInventory: 0,
+      missingInventory: unmappedPhysicalSkus.size,
       blockedByMargin: 0,
       b2bHolds: 0,
       fulfillmentFallbackCount: 0
@@ -90,7 +74,7 @@ function executeDashboardRefresh() {
       let gateCode = GATEKEEPER_CODES.NONE;
       if (gwpSet.has(sku)) { gate = "⚠️ Active GWP Promo"; gateCode = GATEKEEPER_CODES.GWP; }
       else if (launchSet.has(sku)) { gate = "New Launch"; gateCode = GATEKEEPER_CODES.NEW_LAUNCH; }
-      else if (mapVendors.some(b => vendor === b)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
+      else if (isMapVendorMatch(vendor, mapVendors)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
 
       const fulfillment = safeStr(row[sIdx["FULFILLMENT TYPE"]]).toUpperCase() || "SHARED";
       if (!safeStr(row[sIdx["FULFILLMENT TYPE"]])) stats.fulfillmentFallbackCount++;
@@ -141,9 +125,9 @@ function executeDashboardRefresh() {
       let tier = "Clearance/Archive (65% Off)";
       let vdmMarkdown = 0.65;
       let tierCode = TIER_CODES.CLEARANCE;
-      if (gate === "⚠️ Active GWP Promo") { tier = "GWP Promo Hold (0% Hold)"; vdmMarkdown = 0; } // GWP: freeze markdown at 0%
-      else if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; }
-      else if (gate === "3rd Party MAP") { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; }
+      if (gate === "⚠️ Active GWP Promo") { tier = "GWP Promo Hold (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; } // GWP: freeze markdown at 0%
+      else if (gate === "New Launch") { tier = "New Launch (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; }
+      else if (gate === "3rd Party MAP") { tier = "3rd Party MAP Review (0% Hold)"; vdmMarkdown = 0; tierCode = TIER_CODES.GATEKEEPER; }
       else if (totalScore === 10) { tier = "Top Hero (0% Off)"; vdmMarkdown = 0; tierCode = TIER_CODES.TOP_HERO; }
       else if (totalScore >= 8) { tier = "Signature Hero (30% Off)"; vdmMarkdown = 0.30; tierCode = TIER_CODES.SIG_HERO; }
       else if (totalScore >= 6) { tier = "Proven Performer (40% Off)"; vdmMarkdown = 0.40; tierCode = TIER_CODES.PROVEN; }
@@ -168,7 +152,6 @@ function executeDashboardRefresh() {
       const usaStockHeader = uIdx["QTY"] !== undefined ? "QTY" : "EEI USA WAREHOUSE ON HAND STOCK";
       const usaStock = usaRow ? safeNum(usaRow[uIdx[usaStockHeader]]) || 0 : 0;
       const totalStock = (safeNum(usaStock) ?? 0) + (safeNum(webStock) ?? 0);
-      if (!usaRow && fulfillment === "SHARED") stats.missingInventory++;
       const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
       let propPrice = compareMSRP * (1 - vdmMarkdown);
       let simNet = propPrice * (1 - affiliateRate);
@@ -176,7 +159,7 @@ function executeDashboardRefresh() {
       let stackMargin = 0;
       let guardrail = "✓ SAFE";
       let guardrailCode = GUARDRAIL_CODES.SAFE;
-      const isCostMissing = (cost === null || cost === 0) && gateCode !== GATEKEEPER_CODES.GWP;
+      const isCostMissing = (cost === null || cost === 0) && !isZeroCostPermitted(gateCode);
 
       if (isCostMissing) {
         guardrail = "❌ BLOCKED (Missing Cost)";
@@ -219,26 +202,32 @@ function executeDashboardRefresh() {
       // Queue 2: WEBONLY digital review (total score 0–3)
       // Queue 3: SHARED clearance/liquidation (total score 0–3)
       let actionQueue = "";
+      let queueCode = QUEUE_CODES.NONE;
       if (guardrailCode === GUARDRAIL_CODES.ERR_MISSING_COST) {
         actionQueue = "Queue 1A: Data Error (Missing Cost)";
+        queueCode = QUEUE_CODES.QUEUE_1A_COST;
         stats.missingCost++;
       } else if (guardrailCode === GUARDRAIL_CODES.ERR_NEGATIVE_MARGIN) {
         actionQueue = "Queue 1A: ❌ BLOCKED — Negative Base Margin Audit";
+        queueCode = QUEUE_CODES.QUEUE_1A_MARGIN;
         stats.negativeMarginAudits++;
       } else if (guardrailCode === GUARDRAIL_CODES.ERR_MARGIN_FLOOR_VIOLATOR) {
         actionQueue = "Queue 1B: ❌ BLOCKED — Simulated Checkout Margin <20%";
+        queueCode = QUEUE_CODES.QUEUE_1B_FLOOR;
         stats.blockedByMargin++;
       } else if (guardrailCode === GUARDRAIL_CODES.WARN_B2B_HOLD) {
         stats.b2bHolds++;
       } else if (fulfillment === "WEBONLY" && totalScore <= 3) {
         actionQueue = "Queue 2: WEBONLY Digital Review";
+        queueCode = QUEUE_CODES.QUEUE_2_WEBONLY;
       } else if (fulfillment === "SHARED" && totalScore <= 3) {
         actionQueue = "Queue 3: SHARED Clearance / Liquidation";
+        queueCode = QUEUE_CODES.QUEUE_3_CLEARANCE;
       }
 
       stats.total++;
       results.push([
-        sku, gate, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin, actionQueue
+        sku, gate, gateCode, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, tierCode, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, guardrailCode, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin, actionQueue, queueCode
       ]);
     });
 
@@ -246,14 +235,14 @@ function executeDashboardRefresh() {
     Logger.log(`[SYNC COMPLETE ${VDM_CONFIG.VERSION}] Processed ${stats.total} SKUs.`);
     if (stats.missingCost > 0) Logger.log(`[WARN] ${stats.missingCost} SKUs are missing cost data (Waterfall failed).`);
     if (stats.negativeMarginAudits > 0) Logger.log(`[WARN] ${stats.negativeMarginAudits} SKUs have negative base margin.`);
-    if (stats.missingInventory > 0) Logger.log(`[WARN] ${stats.missingInventory} SHARED SKUs missing from USA Warehouse file.`);
+    if (stats.missingInventory > 0) Logger.log(`[WARN] ${stats.missingInventory} physical inventory SKUs are unmapped to the active catalog.`);
     if (stats.blockedByMargin > 0) Logger.log(`[INFO] ${stats.blockedByMargin} SKUs blocked from target discount by profit guardrails.`);
     if (stats.b2bHolds > 0) Logger.log(`[INFO] ${stats.b2bHolds} SKUs held for B2B reserve protection.`);
     if (stats.fulfillmentFallbackCount > 0) Logger.log(`[WARN] ${stats.fulfillmentFallbackCount} SKUs used fulfillment type fallback.`);
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
-    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue"];
+    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Gatekeeper Code", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "Tier Code", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Guardrail Code", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue", "Queue Code"];
     
     const headerWidth = dashboardHeaders.length;
     const rowCount = (results && results.length) ? results.length : 0;
