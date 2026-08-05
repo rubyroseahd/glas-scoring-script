@@ -345,7 +345,7 @@ function executeFlexibleRefreshProcess() {
     generateAllReports(dashboardState);
     const stats = dashboardState.stats || {};
     ui.alert(
-      "🎉 VDM Refresh Complete! (Engine Version: " + VDM_CONFIG.VERSION + ")\n\n" +
+      "🎉 VDM Refresh Complete! (Engine Version: v" + VDM_CONFIG.VERSION + ")\n\n" +
       "• Processed Active SKUs: " + (stats.total || 0) + "\n" +
       "• Queue 1A Missing Cost Errors: " + (stats.missingCost || 0) + "\n" +
       "• Queue 1A Negative Margin Audits: " + (stats.negativeMarginAudits || 0) + "\n" +
