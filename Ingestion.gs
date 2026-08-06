@@ -94,7 +94,7 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const hMap = getHeaderMap(headers);
   if (tabName === VDM_CONFIG.TABS.RAW_COST) {
     getFirstAvailableHeader(hMap, ["SKU", "VARIANT SKU"]);
-    getFirstAvailableHeader(hMap, ["COST", "UNIT COST", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE", "COST PER ITEM"]);
+    getFirstAvailableHeader(hMap, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST", "COST PER ITEM"]);
   }
   const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU", "SKU"]) || safeStr(skuHeader).toUpperCase();
   const skuIdx = hMap[resolvedSkuHeader];
@@ -132,14 +132,15 @@ function executeCostResolutionWaterfall() {
   const costData = costSheet.getDataRange().getValues();
   const sIdxMap = getHeaderMap(shopifyData[0]);
   const cIdxMap = getHeaderMap(costData[0]);
-  const costSkuHeader = getFirstAvailableHeader(cIdxMap, ["SKU_ANCHOR", "SKU", "VARIANT SKU"]);
+  const shopifySkuHeader = getFirstAvailableHeader(sIdxMap, ["SKU_ANCHOR", "VARIANT SKU", "SKU"]);
+  const costSkuHeader = getFirstAvailableHeader(cIdxMap, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]);
   const shopifyCostHeader = findFirstAvailableHeader(sIdxMap, ["COST PER ITEM"]);
 
   const cIdx = {
     sku: cIdxMap[costSkuHeader],
-    eei: cIdxMap["EEI LAST PURCHASE PRICE"],
+    eeiUpdate: cIdxMap["LAST PURCHASE PRICE REPORT EEI(UPDATE)"],
     glas: cIdxMap["GLAS COSTING"],
-    cotr: cIdxMap["COTR LAST PURCHASE PRICE"],
+    cotrUpdate: cIdxMap["LAST PURCHASE PRICE REPORT COTR(UPDATE)"],
     cost: cIdxMap["COST"],
     unitCost: cIdxMap["UNIT COST"],
     costPerItem: cIdxMap["COST PER ITEM"]
@@ -155,17 +156,36 @@ function executeCostResolutionWaterfall() {
 
   const resolved = [["SKU Anchor", "Resolved Cost"]];
   shopifyData.slice(1).forEach(r => {
-    const sku = safeStr(r[0]).toUpperCase();
+    const sku = safeStr(r[sIdxMap[shopifySkuHeader]]).toUpperCase();
+    if (!sku) return;
     const shopifyCost = shopifyCostHeader ? getNumericAt(r, sIdxMap[shopifyCostHeader]) : null;
     const ext = costMap.get(sku);
-    const externalCost = ext
-      ? getNumericAt(ext, cIdx.eei) || getNumericAt(ext, cIdx.glas) || getNumericAt(ext, cIdx.cotr) || getNumericAt(ext, cIdx.cost) || getNumericAt(ext, cIdx.unitCost) || getNumericAt(ext, cIdx.costPerItem)
-      : null;
-    const final = externalCost || shopifyCost || 0;
-    resolved.push([sku, safeNum(final)]);
+    const final = resolveWaterfallCost(ext, cIdx, shopifyCost);
+    resolved.push([sku, final]);
   });
 
   writeToWorkbookTab(VDM_CONFIG.TABS.MASTER_COST, resolved, ss);
+}
+
+function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
+  const getNumericAt = (row, idx) => {
+    if (!row || idx === undefined) return null;
+    return safeNum(row[idx]);
+  };
+  const candidates = [
+    getNumericAt(costRow, costIndexes.eeiUpdate),
+    getNumericAt(costRow, costIndexes.glas),
+    getNumericAt(costRow, costIndexes.cotrUpdate),
+    getNumericAt(costRow, costIndexes.cost),
+    getNumericAt(costRow, costIndexes.unitCost),
+    getNumericAt(costRow, costIndexes.costPerItem),
+    shopifyCost
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    const value = candidates[i];
+    if (typeof value === "number" && !isNaN(value) && value > 0) return value;
+  }
+  return 0;
 }
 
 function writeToWorkbookTab(name, data, ss) {
@@ -234,5 +254,5 @@ function validateCostHeaders(folder) {
   const data = loadCsvFile(folder, VDM_CONFIG.SOURCE_FILES.COST);
   const headers = getHeaderMap(data[0]);
   getFirstAvailableHeader(headers, ["SKU", "VARIANT SKU"]);
-  getFirstAvailableHeader(headers, ["COST", "UNIT COST", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE", "COST PER ITEM"]);
+  getFirstAvailableHeader(headers, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST", "COST PER ITEM"]);
 }

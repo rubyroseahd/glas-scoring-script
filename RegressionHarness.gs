@@ -88,6 +88,30 @@ function runRegressionHarness() {
   assertions.push(assertEqual("b2b hold guardrail", b2bHoldCase.guardrailCode, GUARDRAIL_CODES.WARN_B2B_HOLD));
   assertions.push(assertEqual("b2b hold queue suppressed", b2bHoldCase.queueCode, QUEUE_CODES.NONE));
 
+  // Case 7: Cost waterfall prioritizes audited update headers
+  const prioritizedCost = resolveWaterfallCost(
+    ["SKU1", 9, 8, 7, 6, 5],
+    { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
+    4
+  );
+  assertions.push(assertEqual("cost waterfall priority uses EEI update first", prioritizedCost, 9));
+
+  // Case 8: Cost waterfall skips zero/invalid values and falls through
+  const fallbackCost = resolveWaterfallCost(
+    ["SKU2", 0, -3, "", null, 11],
+    { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
+    13
+  );
+  assertions.push(assertEqual("cost waterfall skips non-positive candidates", fallbackCost, 11));
+
+  // Case 9: Shopify cost is final fallback before zero
+  const shopifyFallbackCost = resolveWaterfallCost(
+    ["SKU3", 0, null, "", null, 0],
+    { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
+    17
+  );
+  assertions.push(assertEqual("cost waterfall falls back to shopify cost", shopifyFallbackCost, 17));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");

@@ -29,10 +29,17 @@ function executeDashboardRefresh() {
     const hasSalesRows = salesData.length > 1;
     const hasUsaRows = usaData.length > 1;
     const hasWebRows = webData.length > 1;
+    const shopifySkuHeader = hasShopifyRows ? getFirstAvailableHeader(sIdx, ["SKU_ANCHOR", "VARIANT SKU", "SKU"]) : findFirstAvailableHeader(sIdx, ["SKU_ANCHOR", "VARIANT SKU", "SKU"]);
+    const salesSkuHeader = hasSalesRows ? getFirstAvailableHeader(vIdx, ["SKU_ANCHOR", "PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]) : findFirstAvailableHeader(vIdx, ["SKU_ANCHOR", "PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]);
+    const usaSkuHeader = hasUsaRows ? getFirstAvailableHeader(uIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]) : findFirstAvailableHeader(uIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]);
+    const webSkuHeader = hasWebRows ? getFirstAvailableHeader(wIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]) : findFirstAvailableHeader(wIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]);
+    const hasCostRows = costData.length > 1;
+    const costSkuHeader = hasCostRows ? getFirstAvailableHeader(cIdx, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]) : findFirstAvailableHeader(cIdx, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]);
 
     const salesValueHeader = hasSalesRows ? getFirstAvailableHeader(vIdx, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]) : findFirstAvailableHeader(vIdx, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]);
     const webStockHeader = hasWebRows ? getFirstAvailableHeader(wIdx, ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]) : findFirstAvailableHeader(wIdx, ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]);
     const usaStockHeader = hasUsaRows ? getFirstAvailableHeader(uIdx, ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]) : findFirstAvailableHeader(uIdx, ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]);
+    const usaSalesHeader = findFirstAvailableHeader(uIdx, ["SALES PAST 30 DAYS"]);
     const shopifyPriceHeader = hasShopifyRows ? getFirstAvailableHeader(sIdx, ["VARIANT PRICE", "PRICE"]) : findFirstAvailableHeader(sIdx, ["VARIANT PRICE", "PRICE"]);
     const shopifyCompareHeader = findFirstAvailableHeader(sIdx, ["VARIANT COMPARE AT PRICE", "COMPARE AT PRICE"]);
     const shopifyQtyHeader = findFirstAvailableHeader(sIdx, ["VARIANT INVENTORY QTY", "INVENTORY QTY"]);
@@ -40,16 +47,20 @@ function executeDashboardRefresh() {
     const vendorHeader = findFirstAvailableHeader(sIdx, ["VENDOR"]);
     const resolvedCostHeader = findFirstAvailableHeader(cIdx, ["RESOLVED COST"]);
 
-    const salesMap = salesValueHeader
-      ? new Map(salesData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[vIdx[salesValueHeader]])]))
+    const salesMap = salesValueHeader && salesSkuHeader
+      ? new Map(salesData.slice(1).map(r => [safeStr(r[vIdx[salesSkuHeader]]).toUpperCase(), safeNum(r[vIdx[salesValueHeader]])]))
       : new Map();
-    const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), r]));
-    const webMap = webStockHeader
-      ? new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx[webStockHeader]])]))
+    const usaMap = usaSkuHeader
+      ? new Map(usaData.slice(1).map(r => [safeStr(r[uIdx[usaSkuHeader]]).toUpperCase(), r]))
       : new Map();
-    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), resolvedCostHeader ? safeNum(r[cIdx[resolvedCostHeader]]) : null]));
+    const webMap = webStockHeader && webSkuHeader
+      ? new Map(webData.slice(1).map(r => [safeStr(r[wIdx[webSkuHeader]]).toUpperCase(), safeNum(r[wIdx[webStockHeader]])]))
+      : new Map();
+    const costMap = costSkuHeader
+      ? new Map(costData.slice(1).map(r => [safeStr(r[cIdx[costSkuHeader]]).toUpperCase(), resolvedCostHeader ? safeNum(r[cIdx[resolvedCostHeader]]) : null]))
+      : new Map();
     const catalogSkuSet = new Set(
-      shopifyData.slice(1).map(r => safeStr(r[0]).toUpperCase()).filter(Boolean)
+      shopifySkuHeader ? shopifyData.slice(1).map(r => safeStr(r[sIdx[shopifySkuHeader]]).toUpperCase()).filter(Boolean) : []
     );
     const unmappedPhysicalSkus = new Set(
       [...Array.from(usaMap.keys()), ...Array.from(webMap.keys())].filter(sku => !catalogSkuSet.has(sku))
@@ -82,7 +93,8 @@ function executeDashboardRefresh() {
 
     const results = [];
     shopifyData.slice(1).forEach(row => {
-      const sku = safeStr(row[0]).toUpperCase(); // Normalize SKU key for consistent map lookups
+      const sku = shopifySkuHeader ? safeStr(row[sIdx[shopifySkuHeader]]).toUpperCase() : ""; // Normalize SKU key for consistent map lookups
+      if (!sku) return;
       const vendor = vendorHeader ? safeStr(row[sIdx[vendorHeader]]).toUpperCase() : "";
       
       // A: SKU Anchor
@@ -194,7 +206,7 @@ function executeDashboardRefresh() {
       const curTierLabel = curMarkdown === 0 ? "Full MSRP" : (curMarkdown <= 0.19 ? "Promo Tier 1 (10-15%)" : (curMarkdown <= 0.35 ? "Promo Tier 2 (20-25%)" : (curMarkdown <= 0.55 ? "Promo Tier 3 (40-50%)" : "Clearance")));
       
       // X: Governance Override
-      const b2b30DSales = usaRow ? safeNum(usaRow[uIdx["SALES PAST 30 DAYS"]]) || 0 : 0;
+      const b2b30DSales = usaRow && usaSalesHeader ? safeNum(usaRow[uIdx[usaSalesHeader]]) || 0 : 0;
       let migration = (vdmMarkdown > curMarkdown) ? "🚨 Deepen Discount" : "📈 Price Recovery/Lift";
       if (vdmMarkdown === curMarkdown) migration = "✓ Price Hold";
 
