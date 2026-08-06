@@ -70,7 +70,7 @@ Place one current copy of each required CSV into the Google Drive folder configu
 
 - Headers must be on **row 1**; data starts on **row 2**.
 - SKU header accepted by ingestion: `PRODUCT VARIANT SKU`, `VARIANT SKU`, or `SKU`.
-- Quantity header accepted by ingestion: `NET QUANTITY`, `NET ITEMS SOLD`, or `QTY`.
+- Quantity header accepted by ingestion: `NET QUANTITY`, `NET ITEMS SOLD`, `QTY`, or `QUANTITY`.
 - The normalized staging output contains `SKU_ANCHOR`, `Product variant SKU`, and `Net items sold`.
 - If the staging tab is missing or empty, the required operator-facing failure wording is:
 
@@ -81,8 +81,8 @@ Place one current copy of each required CSV into the Google Drive folder configu
 - Headers must be on **row 1**; data starts on **row 2**.
 - Required headers:
   - SKU: `SKU` or `VARIANT SKU`
-  - Cost: `COST` or `UNIT COST`
-- Supported waterfall fields are `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, `COST`, and `UNIT COST`.
+  - Cost: `COST`, `UNIT COST`, `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, or `COST PER ITEM`
+- Supported waterfall fields are `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, `COST`, and `UNIT COST` with Shopify `COST PER ITEM` fallback.
 - Resolved cost precedence is: **EEI last purchase price → GLAS costing → COTR last purchase price → Cost → Unit Cost → Shopify Cost per item → 0**.
 
 #### EEI warehouse reports
@@ -95,7 +95,9 @@ This rule applies to both `EEI WEB Whse Stock Report.csv` and `EEI USA Whse Stoc
 - Each file must contain at least **6 rows**. Fewer than six rows is a hard ingestion/pre-flight failure.
 - Required row-5 headers:
   - SKU: `ITEM CODE` or `SKU`
-  - On-hand quantity: `QTY` or `QUANTITY`
+  - On-hand quantity:
+    - USA: `EEI USA WAREHOUSE ON HAND STOCK`, `QTY`, `QUANTITY`, or `ON HAND STOCK`
+    - WEB: `EEI WEB WAREHOUSE ON HAND STOCK`, `QTY`, `QUANTITY`, or `ON HAND STOCK`
 - `SALES PAST 30 DAYS` is optional in the web report and is used from the USA report for the B2B reserve rule.
 - The staging layer normalizes warehouse data to `SKU_ANCHOR`, `ITEM CODE`, on-hand stock, and `SALES PAST 30 DAYS`.
 

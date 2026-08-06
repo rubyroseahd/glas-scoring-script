@@ -25,12 +25,29 @@ function executeDashboardRefresh() {
     const wIdx = webData.length > 0 ? getHeaderMap(webData[0]) : {};
     const cIdx = costData.length > 0 ? getHeaderMap(costData[0]) : {};
 
-    const salesValueHeader = vIdx["NET QUANTITY"] !== undefined ? "NET QUANTITY" : "NET ITEMS SOLD";
-    const salesMap = new Map(salesData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[vIdx[salesValueHeader]])]));
+    const hasShopifyRows = shopifyData.length > 1;
+    const hasSalesRows = salesData.length > 1;
+    const hasUsaRows = usaData.length > 1;
+    const hasWebRows = webData.length > 1;
+
+    const salesValueHeader = hasSalesRows ? getFirstAvailableHeader(vIdx, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]) : findFirstAvailableHeader(vIdx, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]);
+    const webStockHeader = hasWebRows ? getFirstAvailableHeader(wIdx, ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]) : findFirstAvailableHeader(wIdx, ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]);
+    const usaStockHeader = hasUsaRows ? getFirstAvailableHeader(uIdx, ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]) : findFirstAvailableHeader(uIdx, ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]);
+    const shopifyPriceHeader = hasShopifyRows ? getFirstAvailableHeader(sIdx, ["VARIANT PRICE", "PRICE"]) : findFirstAvailableHeader(sIdx, ["VARIANT PRICE", "PRICE"]);
+    const shopifyCompareHeader = findFirstAvailableHeader(sIdx, ["VARIANT COMPARE AT PRICE", "COMPARE AT PRICE"]);
+    const shopifyQtyHeader = findFirstAvailableHeader(sIdx, ["VARIANT INVENTORY QTY", "INVENTORY QTY"]);
+    const fulfillmentHeader = findFirstAvailableHeader(sIdx, ["FULFILLMENT TYPE"]);
+    const vendorHeader = findFirstAvailableHeader(sIdx, ["VENDOR"]);
+    const resolvedCostHeader = findFirstAvailableHeader(cIdx, ["RESOLVED COST"]);
+
+    const salesMap = salesValueHeader
+      ? new Map(salesData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[vIdx[salesValueHeader]])]))
+      : new Map();
     const usaMap = new Map(usaData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), r]));
-    const webStockHeader = wIdx["QTY"] !== undefined ? "QTY" : "EEI WEB WAREHOUSE ON HAND STOCK";
-    const webMap = new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx[webStockHeader]])]));
-    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[cIdx["RESOLVED COST"]])]));
+    const webMap = webStockHeader
+      ? new Map(webData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), safeNum(r[wIdx[webStockHeader]])]))
+      : new Map();
+    const costMap = new Map(costData.slice(1).map(r => [safeStr(r[0]).toUpperCase(), resolvedCostHeader ? safeNum(r[cIdx[resolvedCostHeader]]) : null]));
     const catalogSkuSet = new Set(
       shopifyData.slice(1).map(r => safeStr(r[0]).toUpperCase()).filter(Boolean)
     );
@@ -66,7 +83,7 @@ function executeDashboardRefresh() {
     const results = [];
     shopifyData.slice(1).forEach(row => {
       const sku = safeStr(row[0]).toUpperCase(); // Normalize SKU key for consistent map lookups
-      const vendor = safeStr(row[sIdx["VENDOR"]]).toUpperCase();
+      const vendor = vendorHeader ? safeStr(row[sIdx[vendorHeader]]).toUpperCase() : "";
       
       // A: SKU Anchor
       // B: Gatekeeper
@@ -76,11 +93,11 @@ function executeDashboardRefresh() {
       else if (launchSet.has(sku)) { gate = "New Launch"; gateCode = GATEKEEPER_CODES.NEW_LAUNCH; }
       else if (isMapVendorMatch(vendor, mapVendors)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
 
-      const fulfillment = safeStr(row[sIdx["FULFILLMENT TYPE"]]).toUpperCase() || "SHARED";
-      if (!safeStr(row[sIdx["FULFILLMENT TYPE"]])) stats.fulfillmentFallbackCount++;
+      const fulfillment = fulfillmentHeader ? (safeStr(row[sIdx[fulfillmentHeader]]).toUpperCase() || "SHARED") : "SHARED";
+      if (!fulfillmentHeader || !safeStr(row[sIdx[fulfillmentHeader]])) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
-      const price = safeNum(row[sIdx["VARIANT PRICE"]]);
-      const rawCompare = safeNum(row[sIdx["VARIANT COMPARE AT PRICE"]]);
+      const price = safeNum(row[sIdx[shopifyPriceHeader]]);
+      const rawCompare = shopifyCompareHeader ? safeNum(row[sIdx[shopifyCompareHeader]]) : null;
       
       const compareMSRP = (rawCompare === 0 || rawCompare === null) ? (price || 0) : rawCompare;
       const curMarkdown = (compareMSRP === price || compareMSRP === 0) ? 0 : (compareMSRP - (price || 0)) / compareMSRP;
@@ -149,10 +166,9 @@ function executeDashboardRefresh() {
       }
 
       const usaRow = usaMap.get(sku);
-      const usaStockHeader = uIdx["QTY"] !== undefined ? "QTY" : "EEI USA WAREHOUSE ON HAND STOCK";
       const usaStock = usaRow ? safeNum(usaRow[uIdx[usaStockHeader]]) || 0 : 0;
       const totalStock = (safeNum(usaStock) ?? 0) + (safeNum(webStock) ?? 0);
-      const shopifyQty = safeNum(row[sIdx["VARIANT INVENTORY QTY"]]) || 0;
+      const shopifyQty = shopifyQtyHeader ? safeNum(row[sIdx[shopifyQtyHeader]]) || 0 : 0;
       let propPrice = compareMSRP * (1 - vdmMarkdown);
       let simNet = propPrice * (1 - affiliateRate);
       

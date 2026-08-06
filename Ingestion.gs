@@ -47,7 +47,8 @@ function ingestShopify(folder, ss) {
 
     const processed = [sku];
     headers.forEach(h => {
-      const val = row[hMap[h.toUpperCase()]];
+      const idx = hMap[safeStr(h).toUpperCase()];
+      const val = idx === undefined ? null : row[idx];
       processed.push(/price|qty|cost/i.test(h) ? safeNum(val) : safeStr(val));
     });
     const typeValue = typeHeader ? safeStr(row[hMap[typeHeader]]).toUpperCase() : "";
@@ -65,7 +66,12 @@ function ingestEEI(folder, fileName, tabName, ss) {
   }
   const hMap = getHeaderMap(data[4]);
   const skuHeader = getFirstAvailableHeader(hMap, ["ITEM CODE", "SKU"]);
-  const qtyHeader = getFirstAvailableHeader(hMap, ["QTY", "QUANTITY", "EEI USA WAREHOUSE ON HAND STOCK", "EEI WEB WAREHOUSE ON HAND STOCK"]);
+  const qtyHeader = getFirstAvailableHeader(
+    hMap,
+    tabName === VDM_CONFIG.TABS.RAW_EEI_USA
+      ? ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]
+      : ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]
+  );
   const salesHeader = findFirstAvailableHeader(hMap, ["SALES PAST 30 DAYS"]);
   const stockHeader = tabName === VDM_CONFIG.TABS.RAW_EEI_USA
     ? "EEI USA WAREHOUSE ON HAND STOCK"
@@ -84,14 +90,14 @@ function ingestEEI(folder, fileName, tabName, ss) {
 
 function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const data = loadCsvFile(folder, fileName);
-  const headers = data[0];
+  const headers = data[0].map(h => safeStr(h));
   const hMap = getHeaderMap(headers);
   if (tabName === VDM_CONFIG.TABS.RAW_COST) {
     getFirstAvailableHeader(hMap, ["SKU", "VARIANT SKU"]);
-    getFirstAvailableHeader(hMap, ["COST", "UNIT COST"]);
+    getFirstAvailableHeader(hMap, ["COST", "UNIT COST", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE", "COST PER ITEM"]);
   }
-  const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU"]) || skuHeader;
-  const skuIdx = hMap[resolvedSkuHeader.toUpperCase()];
+  const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU", "SKU"]) || safeStr(skuHeader).toUpperCase();
+  const skuIdx = hMap[resolvedSkuHeader];
 
   const rows = data.slice(1).map(r => {
     const sku = safeStr(r[skuIdx]).toUpperCase();
@@ -106,7 +112,7 @@ function ingestSalesCSV(folder, ss) {
   const data = loadCsvFile(folder, VDM_CONFIG.SOURCE_FILES.SALES);
   const hMap = getHeaderMap(data[0]);
   const skuHeader = getFirstAvailableHeader(hMap, ["PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]);
-  const qtyHeader = getFirstAvailableHeader(hMap, ["NET QUANTITY", "NET ITEMS SOLD", "QTY"]);
+  const qtyHeader = getFirstAvailableHeader(hMap, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]);
 
   const rows = data.slice(1).map(r => {
     const sku = safeStr(r[hMap[skuHeader]]).toUpperCase();
@@ -127,6 +133,7 @@ function executeCostResolutionWaterfall() {
   const sIdxMap = getHeaderMap(shopifyData[0]);
   const cIdxMap = getHeaderMap(costData[0]);
   const costSkuHeader = getFirstAvailableHeader(cIdxMap, ["SKU_ANCHOR", "SKU", "VARIANT SKU"]);
+  const shopifyCostHeader = findFirstAvailableHeader(sIdxMap, ["COST PER ITEM"]);
 
   const cIdx = {
     sku: cIdxMap[costSkuHeader],
@@ -134,20 +141,27 @@ function executeCostResolutionWaterfall() {
     glas: cIdxMap["GLAS COSTING"],
     cotr: cIdxMap["COTR LAST PURCHASE PRICE"],
     cost: cIdxMap["COST"],
-    unitCost: cIdxMap["UNIT COST"]
+    unitCost: cIdxMap["UNIT COST"],
+    costPerItem: cIdxMap["COST PER ITEM"]
   };
 
   const costMap = new Map();
-  costData.slice(1).forEach(r => costMap.set(safeStr(r[cIdx.sku]).toUpperCase(), r));
+  costData.slice(1).forEach(r => {
+    const sku = safeStr(cIdx.sku === undefined ? "" : r[cIdx.sku]).toUpperCase();
+    if (sku) costMap.set(sku, r);
+  });
+
+  const getNumericAt = (row, idx) => idx === undefined ? null : safeNum(row[idx]);
 
   const resolved = [["SKU Anchor", "Resolved Cost"]];
   shopifyData.slice(1).forEach(r => {
     const sku = safeStr(r[0]).toUpperCase();
-    const shopifyCost = safeNum(r[sIdxMap["COST PER ITEM"]]);
+    const shopifyCost = shopifyCostHeader ? getNumericAt(r, sIdxMap[shopifyCostHeader]) : null;
     const ext = costMap.get(sku);
-    const final = ext
-      ? safeNum(ext[cIdx.eei]) || safeNum(ext[cIdx.glas]) || safeNum(ext[cIdx.cotr]) || safeNum(ext[cIdx.cost]) || safeNum(ext[cIdx.unitCost]) || shopifyCost || 0
-      : shopifyCost || 0;
+    const externalCost = ext
+      ? getNumericAt(ext, cIdx.eei) || getNumericAt(ext, cIdx.glas) || getNumericAt(ext, cIdx.cotr) || getNumericAt(ext, cIdx.cost) || getNumericAt(ext, cIdx.unitCost) || getNumericAt(ext, cIdx.costPerItem)
+      : null;
+    const final = externalCost || shopifyCost || 0;
     resolved.push([sku, safeNum(final)]);
   });
 
@@ -174,7 +188,8 @@ function loadCsvFile(folder, fileName) {
 
 function findFirstAvailableHeader(headerMap, candidates) {
   for (let i = 0; i < candidates.length; i++) {
-    if (headerMap[candidates[i]] !== undefined) return candidates[i];
+    const normalized = safeStr(candidates[i]).toUpperCase();
+    if (normalized && headerMap[normalized] !== undefined) return normalized;
   }
   return null;
 }
@@ -196,8 +211,8 @@ function validateShopifyHeaders(folder) {
 function validateSalesHeaders(folder) {
   const data = loadCsvFile(folder, VDM_CONFIG.SOURCE_FILES.SALES);
   const headers = getHeaderMap(data[0]);
-  getFirstAvailableHeader(headers, ["PRODUCT VARIANT SKU", "SKU"]);
-  getFirstAvailableHeader(headers, ["NET QUANTITY", "NET ITEMS SOLD"]);
+  getFirstAvailableHeader(headers, ["PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]);
+  getFirstAvailableHeader(headers, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]);
 }
 
 function validateWarehouseHeaders(folder, fileName) {
@@ -207,12 +222,17 @@ function validateWarehouseHeaders(folder, fileName) {
   }
   const headers = getHeaderMap(data[4]);
   getFirstAvailableHeader(headers, ["ITEM CODE", "SKU"]);
-  getFirstAvailableHeader(headers, ["QTY", "QUANTITY", "EEI USA WAREHOUSE ON HAND STOCK", "EEI WEB WAREHOUSE ON HAND STOCK"]);
+  getFirstAvailableHeader(
+    headers,
+    fileName === VDM_CONFIG.SOURCE_FILES.EEI_USA
+      ? ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]
+      : ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]
+  );
 }
 
 function validateCostHeaders(folder) {
   const data = loadCsvFile(folder, VDM_CONFIG.SOURCE_FILES.COST);
   const headers = getHeaderMap(data[0]);
   getFirstAvailableHeader(headers, ["SKU", "VARIANT SKU"]);
-  getFirstAvailableHeader(headers, ["COST", "UNIT COST"]);
+  getFirstAvailableHeader(headers, ["COST", "UNIT COST", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "COTR LAST PURCHASE PRICE", "COST PER ITEM"]);
 }
