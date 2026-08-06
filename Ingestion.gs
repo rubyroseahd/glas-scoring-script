@@ -63,15 +63,13 @@ function ingestEEI(folder, fileName, tabName, ss) {
   if (data.length < 6) {
     throw new Error(`File ${fileName} contains insufficient rows (${data.length} found). Expected metadata rows 1–4, header on row 5, and data on row 6+.`);
   }
-
   const hMap = getHeaderMap(data[4]);
   const skuHeader = getFirstAvailableHeader(hMap, ["ITEM CODE", "SKU"]);
-  const qtyHeader = getFirstAvailableHeader(hMap, ["QTY", "QUANTITY"]);
+  const qtyHeader = getFirstAvailableHeader(hMap, ["QTY", "QUANTITY", "EEI USA WAREHOUSE ON HAND STOCK", "EEI WEB WAREHOUSE ON HAND STOCK"]);
   const salesHeader = findFirstAvailableHeader(hMap, ["SALES PAST 30 DAYS"]);
   const stockHeader = tabName === VDM_CONFIG.TABS.RAW_EEI_USA
     ? "EEI USA WAREHOUSE ON HAND STOCK"
     : "EEI WEB WAREHOUSE ON HAND STOCK";
-
   const rows = data.slice(5).map(r => {
     const sku = safeStr(r[hMap[skuHeader]]).toUpperCase();
     return [
@@ -81,7 +79,6 @@ function ingestEEI(folder, fileName, tabName, ss) {
       salesHeader ? safeNum(r[hMap[salesHeader]]) || 0 : 0
     ];
   }).filter(r => r[0] !== "");
-
   writeToWorkbookTab(tabName, [["SKU_ANCHOR", "ITEM CODE", stockHeader, "SALES PAST 30 DAYS"], ...rows], ss);
 }
 
@@ -210,7 +207,7 @@ function validateWarehouseHeaders(folder, fileName) {
   }
   const headers = getHeaderMap(data[4]);
   getFirstAvailableHeader(headers, ["ITEM CODE", "SKU"]);
-  getFirstAvailableHeader(headers, ["QTY", "QUANTITY"]);
+  getFirstAvailableHeader(headers, ["QTY", "QUANTITY", "EEI USA WAREHOUSE ON HAND STOCK", "EEI WEB WAREHOUSE ON HAND STOCK"]);
 }
 
 function validateCostHeaders(folder) {
