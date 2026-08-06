@@ -7,6 +7,8 @@ const VDM_CONFIG = {
   VERSION: "3.0.0-PROD",
   AFFILIATE_RATE_DEFAULT: 0.15,
   PROFIT_FLOOR_GUARDRAIL: 0.20,
+  CLEARANCE_CAP_WARN: 0.20,
+  HERO_POOL_MIN_WARN: 0.15,
   FOLDER_ID: "1m1BoV4XOYoHSCu1QeOOddmcOdNLUGdlh",
   
   SOURCE_FILES: {
@@ -22,6 +24,7 @@ const VDM_CONFIG = {
     BRIEF: "[00] Executive Brief", 
     ACTION: "[00] Action Items & Sign-off",
     SETTINGS: "[01] Control Panel",
+    BASELINE: "[01b] Baseline Snapshot",
     DASHBOARD: "[02] Dashboard Matrix", 
     SUMMARY: "[03] Tier Summary & Distribution Panel", 
     SCORECARD: "[01] Supplier Scorecard & Capital Velocity", 
@@ -53,6 +56,13 @@ const VDM_CONFIG = {
   },
 
   HOUSE_BRANDS: ["Gläs", "glastoy", "GLASTOY"],
+  BRACKET_NAMES: {
+    HERO: "Full MSRP / Hero",
+    SIGNATURE: "Light Promo / Signature",
+    PROVEN: "Moderate Promo / Proven",
+    ACCELERATOR: "Deep Promo / Accelerator",
+    CLEARANCE: "Clearance / Archive"
+  },
 
   // Header String Registry for dynamic matching
   HEADERS: {

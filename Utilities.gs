@@ -50,3 +50,19 @@ function getPercentileRankInc(sortedArr, value) {
   const rankHigh = (n - 1 - above) / (n - 1);
   return (rankLow + rankHigh) / 2;
 }
+
+function getStorefrontBracket(price, compareMsrp) {
+  const cleanPrice = safeNum(price);
+  const cleanCompare = safeNum(compareMsrp);
+
+  if (!mathGuard(cleanPrice, cleanCompare) || cleanCompare === 0 || cleanCompare === cleanPrice) {
+    return VDM_CONFIG.BRACKET_NAMES.HERO;
+  }
+
+  const depth = (cleanCompare - cleanPrice) / cleanCompare;
+  if (depth <= 0) return VDM_CONFIG.BRACKET_NAMES.HERO;
+  if (depth < 0.35) return VDM_CONFIG.BRACKET_NAMES.SIGNATURE;
+  if (depth < 0.45) return VDM_CONFIG.BRACKET_NAMES.PROVEN;
+  if (depth < 0.55) return VDM_CONFIG.BRACKET_NAMES.ACCELERATOR;
+  return VDM_CONFIG.BRACKET_NAMES.CLEARANCE;
+}

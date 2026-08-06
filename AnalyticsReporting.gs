@@ -13,14 +13,16 @@ function generateAllReports(dashboardState) {
 
     const idx = getHeaderMap(headers); // Use the standardized helper for Dashboard columns
 
-    generateSummaryTab(ss, rows, idx, shopifyMap);
+    const summaryTelemetry = generateSummaryTab(ss, rows, idx, shopifyMap);
     generateActionItems(ss, rows, idx, shopifyMap);
     generateSyncAudit(ss, rows, idx, shopifyMap);
     generateMasterLedger(ss, rows, idx, shopifyMap);
     generateSupplierScorecard(ss, rows, idx, shopifyMap);
     logElasticitySnapshot(ss, rows, idx);
+    return { summaryTelemetry };
   } catch (e) {
     logError("Reporting", e);
+    return { summaryTelemetry: null };
   }
 }
 
@@ -52,38 +54,80 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const globalAffiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15;
 
   // --- PANEL A: GLOBAL CATALOG COMPARATIVE DISTRIBUTION MATRIX ---
-  const panelAHeaders = ["Strategic Pricing Bracket", "Shopify SKU Count", "Shopify Catalog %", "VDM SKU Count", "VDM Catalog %", "Weight Shift %", "Base VDM Markdown %", "Affiliate Rate", "Stacked Discount %", "Risk Profile", "Validation Status"];
-  const brackets = [
-    { name: "Top Hero Bracket", mkdn: 0.00, risk: "None-Low", shopCheck: (m) => m === 0, vdmMatch: "Top Hero" },
-    { name: "Signature Hero Bracket", mkdn: 0.30, risk: "Low-Med", shopCheck: (m) => m > 0 && m <= 0.35, vdmMatch: "Signature Hero" },
-    { name: "Proven Performer Bracket", mkdn: 0.40, risk: "Med", shopCheck: (m) => m > 0.35 && m <= 0.45, vdmMatch: "Proven Performer" },
-    { name: "Accelerator Bracket", mkdn: 0.50, risk: "Med-High", shopCheck: (m) => m > 0.45 && m <= 0.55, vdmMatch: "Accelerator" },
-    { name: "Clearance/Archive Bracket", mkdn: 0.65, risk: "High", shopCheck: (m) => m > 0.55, vdmMatch: "Clearance/Archive" },
-    { name: "New Launch Bracket", mkdn: 0.00, risk: "None", shopCheck: (m) => false, vdmMatch: "New Launch" },
-    { name: "B2B Protection Hold Bracket", mkdn: 0.00, risk: "None", shopCheck: (m) => false, vdmMatch: "B2B Protection Hold" }
+  const panelAHeaders = ["Storefront Bracket", "Baseline SKU Count", "Baseline Catalog %", "VDM Proposed SKU Count", "VDM Proposed Catalog %", "Net SKU Shift", "Net Catalog Shift %"];
+  const bracketOrder = [
+    VDM_CONFIG.BRACKET_NAMES.HERO,
+    VDM_CONFIG.BRACKET_NAMES.SIGNATURE,
+    VDM_CONFIG.BRACKET_NAMES.PROVEN,
+    VDM_CONFIG.BRACKET_NAMES.ACCELERATOR,
+    VDM_CONFIG.BRACKET_NAMES.CLEARANCE
   ];
 
+  const baselineBracketHeader = findFirstAvailableHeader(idx, ["BASELINE STOREFRONT BRACKET"]);
+  const targetBracketHeader = findFirstAvailableHeader(idx, ["TARGET VDM BRACKET"]);
+  const livePriceHeader = findFirstAvailableHeader(idx, ["LIVE STOREFRONT PRICE"]);
+  const baselinePriceHeader = findFirstAvailableHeader(idx, ["BASELINE STOREFRONT PRICE"]);
+  const compareHeader = findFirstAvailableHeader(idx, ["LIVE COMPARE MSRP"]);
+  const proposedPriceHeader = findFirstAvailableHeader(idx, ["NEW PROPOSED STOREFRONT PRICE"]);
+  const vdmMarkdownHeader = findFirstAvailableHeader(idx, ["VDM MARKDOWN DEPTH %"]);
+  const unitsHeader = findFirstAvailableHeader(idx, ["RAW 90D RETAIL VELOCITY"]);
+
   const totalRows = rows.length;
-  let panelAData = totalRows === 0 ? [] : brackets.map(b => {
-    const shopCount = rows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) || 0)).length;
-    const vdmRows = rows.filter(r => r[idx["TARGET STRATEGIC TIER"]] && r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch));
-    const vdmCount = vdmRows.length;
-
-    const shopPct = shopCount / totalRows;
-    const vdmPct = vdmCount / totalRows;
-    const diff = vdmPct - shopPct;
-    const stacked = 1 - ((1 - b.mkdn) * (1 - globalAffiliateRate));
-    const validation = "100.00%";
-
-    return [b.name, shopCount, shopPct, vdmCount, vdmPct, diff, b.mkdn, globalAffiliateRate, stacked, b.risk, validation];
+  const baselineCounts = {};
+  const targetCounts = {};
+  bracketOrder.forEach(name => {
+    baselineCounts[name] = 0;
+    targetCounts[name] = 0;
   });
 
-  // Add Total Row for Panel A
-  const panelATotals = ["Total Catalog Reconciliation", 
-    panelAData.reduce((s, r) => s + r[1], 0), panelAData.reduce((s, r) => s + r[2], 0),
-    panelAData.reduce((s, r) => s + r[3], 0), panelAData.reduce((s, r) => s + r[4], 0),
-    panelAData.reduce((s, r) => s + r[5], 0), "", "", "", "", "100.00%"];
-  panelAData.push(panelATotals);
+  let clearanceCount = 0;
+  let projectedRevenueImpact90 = 0;
+
+  rows.forEach(r => {
+    const livePrice = livePriceHeader ? safeNum(r[idx[livePriceHeader]]) : null;
+    const baselinePrice = baselinePriceHeader ? safeNum(r[idx[baselinePriceHeader]]) : livePrice;
+    const compareMsrp = compareHeader ? safeNum(r[idx[compareHeader]]) : null;
+    const proposedPrice = proposedPriceHeader ? safeNum(r[idx[proposedPriceHeader]]) : null;
+    const units90 = unitsHeader ? (safeNum(r[idx[unitsHeader]]) || 0) : 0;
+    const rowMarkdown = vdmMarkdownHeader ? safeNum(r[idx[vdmMarkdownHeader]]) : null;
+
+    const fallbackBaselineBracket = getStorefrontBracket(
+      baselinePrice !== null ? baselinePrice : (livePrice || 0),
+      compareMsrp !== null ? compareMsrp : (baselinePrice !== null ? baselinePrice : (livePrice || 0))
+    );
+    const fallbackTargetBracket = getStorefrontBracket(
+      proposedPrice !== null ? proposedPrice : (livePrice || 0),
+      compareMsrp !== null ? compareMsrp : (proposedPrice !== null ? proposedPrice : (livePrice || 0))
+    );
+
+    const _canonicalBrackets = Object.values(VDM_CONFIG.BRACKET_NAMES);
+    const _rawBaselineBracket = baselineBracketHeader ? (safeStr(r[idx[baselineBracketHeader]]) || null) : null;
+    const _rawTargetBracket = targetBracketHeader ? (safeStr(r[idx[targetBracketHeader]]) || null) : null;
+    const baselineBracket = (_rawBaselineBracket && _canonicalBrackets.indexOf(_rawBaselineBracket) !== -1)
+      ? _rawBaselineBracket
+      : fallbackBaselineBracket;
+    const targetBracket = (_rawTargetBracket && _canonicalBrackets.indexOf(_rawTargetBracket) !== -1)
+      ? _rawTargetBracket
+      : fallbackTargetBracket;
+
+    if (baselineCounts[baselineBracket] !== undefined) baselineCounts[baselineBracket]++;
+    if (targetCounts[targetBracket] !== undefined) targetCounts[targetBracket]++;
+    if ((rowMarkdown || 0) >= 0.65) clearanceCount++;
+
+    if (proposedPrice !== null && baselinePrice !== null) {
+      projectedRevenueImpact90 += (proposedPrice - baselinePrice) * units90;
+    }
+  });
+
+  const panelAData = bracketOrder.map(bracketName => {
+    const baselineCount = baselineCounts[bracketName] || 0;
+    const targetCount = targetCounts[bracketName] || 0;
+    const baselinePct = totalRows > 0 ? baselineCount / totalRows : 0;
+    const targetPct = totalRows > 0 ? targetCount / totalRows : 0;
+    const netSkuShift = targetCount - baselineCount;
+    const netCatalogShiftPct = targetPct - baselinePct;
+    return [bracketName, baselineCount, baselinePct, targetCount, targetPct, netSkuShift, netCatalogShiftPct];
+  });
 
   const panelAWidth = panelAHeaders.length;
   sheet.getRange(1, 1).setValue("GLOBAL CATALOG ALLOCATION SUMMARY MATRIX").setFontSize(14).setFontWeight("bold").setBackground(VDM_CONFIG.DESIGN.PANEL_GLOBAL_BG).setFontColor("#FFFFFF");
@@ -91,11 +135,20 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   applyHeaderStyle(sheet.getRange(2, 1, 1, panelAWidth));
   sheet.getRange(3, 1, panelAData.length, panelAWidth).setValues(panelAData);
 
-  [3, 5, 6, 7, 8, 9].forEach(col => {
+  [3, 5, 7].forEach(col => {
     sheet.getRange(3, col, panelAData.length, 1).setNumberFormat("0.00%");
   });
 
   // --- PANEL B: GLÄS & GLASTOY PROPRIETARY CATALOG DELTA PANEL ---
+  const proprietaryBrackets = [
+    { name: "Top Hero Bracket", mkdn: 0.00, shopCheck: (m) => m === 0, vdmMatch: "Top Hero" },
+    { name: "Signature Hero Bracket", mkdn: 0.30, shopCheck: (m) => m > 0 && m <= 0.35, vdmMatch: "Signature Hero" },
+    { name: "Proven Performer Bracket", mkdn: 0.40, shopCheck: (m) => m > 0.35 && m <= 0.45, vdmMatch: "Proven Performer" },
+    { name: "Accelerator Bracket", mkdn: 0.50, shopCheck: (m) => m > 0.45 && m <= 0.55, vdmMatch: "Accelerator" },
+    { name: "Clearance/Archive Bracket", mkdn: 0.65, shopCheck: (m) => m > 0.55, vdmMatch: "Clearance/Archive" },
+    { name: "New Launch Bracket", mkdn: 0.00, shopCheck: (m) => false, vdmMatch: "New Launch" },
+    { name: "B2B Protection Hold Bracket", mkdn: 0.00, shopCheck: (m) => false, vdmMatch: "B2B Protection Hold" }
+  ];
   const houseRows = rows.filter(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
     const vendorName = (shopifyMap.get(sku)?.vendor || "").toUpperCase();
@@ -104,7 +157,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const totalHouseRows = houseRows.length;
   const panelBHeaders = ["Proprietary Bracket", "Shopify Count", "Shopify %", "VDM Count", "VDM %", "Shift %", "Base %", "Stacked %"];
   
-  let panelBData = totalHouseRows === 0 ? [] : brackets.map(b => {
+  let panelBData = totalHouseRows === 0 ? [] : proprietaryBrackets.map(b => {
     const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) ?? 0)).length;
     const vdmCount = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch)).length;
     
@@ -151,6 +204,32 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   sheet.getRange(startPanelC, 1, 5, 2).setValues(panelCData);
   sheet.getRange(startPanelC, 1, 1, 2).setFontWeight("bold").setBackground("#EEEEEE");
   sheet.getRange(startPanelC + 4, 1, 1, 2).setFontWeight("bold").setBorder(true, null, null, null, null, null);
+
+  const clearanceRatio = totalRows > 0 ? clearanceCount / totalRows : 0;
+  const clearanceCapWarn = clearanceRatio > VDM_CONFIG.CLEARANCE_CAP_WARN;
+  if (clearanceCapWarn) {
+    Logger.log(`[EXEC WARNING] Clearance catalog ratio ${clearanceRatio.toFixed(4)} exceeds threshold ${VDM_CONFIG.CLEARANCE_CAP_WARN.toFixed(4)}.`);
+  }
+
+  const baselineHeroCount = baselineCounts[VDM_CONFIG.BRACKET_NAMES.HERO] || 0;
+  const targetHeroCount = targetCounts[VDM_CONFIG.BRACKET_NAMES.HERO] || 0;
+  const heroShrinkage = baselineHeroCount > 0 ? (baselineHeroCount - targetHeroCount) / baselineHeroCount : 0;
+  const heroDepletionAlert = baselineHeroCount > 0 && heroShrinkage > VDM_CONFIG.HERO_POOL_MIN_WARN;
+  if (heroDepletionAlert) {
+    Logger.log(`[EXEC WARNING] Hero pool shrinkage ${heroShrinkage.toFixed(4)} exceeds threshold ${VDM_CONFIG.HERO_POOL_MIN_WARN.toFixed(4)}.`);
+  }
+
+  return {
+    clearanceCount,
+    totalRows,
+    clearanceRatio,
+    clearanceCapWarn,
+    baselineHeroCount,
+    targetHeroCount,
+    heroShrinkage,
+    heroDepletionAlert,
+    projectedRevenueImpact90
+  };
 }
 
 /**
@@ -350,8 +429,16 @@ function executeFlexibleRefreshProcess() {
     ui.showModelessDialog(HtmlService.createHtmlOutput("<b>Executing Full VDM System Sync...</b>"), "System Status");
     runDataIngestion();
     const dashboardState = executeDashboardRefresh();
-    generateAllReports(dashboardState);
+    const reportState = generateAllReports(dashboardState);
+    const summaryTelemetry = reportState && reportState.summaryTelemetry ? reportState.summaryTelemetry : {};
     const stats = dashboardState.stats || {};
+    const clearanceRatio = safeNum(summaryTelemetry.clearanceRatio) || 0;
+    const heroShrinkage = safeNum(summaryTelemetry.heroShrinkage) || 0;
+    const projectedRevenueImpact90 = safeNum(summaryTelemetry.projectedRevenueImpact90) || 0;
+    const clearanceHealthLine = (summaryTelemetry.clearanceCapWarn ? "🚨 ALERT" : "✓ Within Cap") +
+      ` (${summaryTelemetry.clearanceCount || 0}/${summaryTelemetry.totalRows || 0}; ${(clearanceRatio * 100).toFixed(2)}%)`;
+    const heroHealthLine = (summaryTelemetry.heroDepletionAlert ? "🚨 ALERT" : "✓ Stable") +
+      ` (Baseline ${summaryTelemetry.baselineHeroCount || 0} → Target ${summaryTelemetry.targetHeroCount || 0}; ${(heroShrinkage * 100).toFixed(2)}%)`;
     ui.alert(
       "🎉 VDM Refresh Complete! (Engine Version: v" + VDM_CONFIG.VERSION + ")\n\n" +
       "• Processed Active SKUs: " + (stats.total || 0) + "\n" +
@@ -360,7 +447,10 @@ function executeFlexibleRefreshProcess() {
       "• Queue 1B Margin Floor Violators (<20%): " + (stats.blockedByMargin || 0) + "\n" +
       "• B2B Reserve Holds: " + (stats.b2bHolds || 0) + "\n" +
       "• Unmapped SHARED Physical Stock: " + (stats.missingInventory || 0) + "\n" +
-      "• Fulfillment Type Fallbacks: " + (stats.fulfillmentFallbackCount || 0)
+      "• Fulfillment Type Fallbacks: " + (stats.fulfillmentFallbackCount || 0) + "\n" +
+      "• Clearance Health (65% Markdown Cap): " + clearanceHealthLine + "\n" +
+      "• Hero Pool Shrinkage: " + heroHealthLine + "\n" +
+      "• Projected 90-Day Revenue Impact: $" + projectedRevenueImpact90.toFixed(2)
     );
   } catch (e) {
     ui.alert("Process Failed: " + e.message);

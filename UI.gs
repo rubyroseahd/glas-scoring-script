@@ -19,6 +19,8 @@ function onOpen() {
     .addSeparator()
     .addSubMenu(ui.createMenu('Advanced Diagnostics')
       .addItem('Run Pre-Flight Sanity Check', 'runPreFlightSanityCheck')
+      .addItem('Freeze Pre-Campaign Baseline', 'freezePreCampaignBaseline')
+      .addItem('Clear Baseline Snapshot', 'clearPreCampaignBaseline')
       .addItem('Commit Shopify Sync Only (Bypass Matrix)', 'commitShopifySyncOnly')
       .addItem('Emergency Matrix Rollback', 'rollbackToRecoveryPoint'))
     .addSeparator()
@@ -107,5 +109,60 @@ function rollbackToRecoveryPoint() {
     dash.clear();
     backup.getDataRange().copyTo(dash.getRange(1,1));
     ui.alert("System Rollback Complete.");
+  }
+}
+
+function freezePreCampaignBaseline() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sourceSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
+    if (!sourceSheet || sourceSheet.getLastRow() < 2) throw new Error("Shopify export data not found.");
+
+    const data = sourceSheet.getDataRange().getValues();
+    const idx = getHeaderMap(data[0]);
+    const skuHeader = getFirstAvailableHeader(idx, ["SKU_ANCHOR", "VARIANT SKU", "SKU"]);
+    const priceHeader = getFirstAvailableHeader(idx, ["VARIANT PRICE", "PRICE"]);
+    const compareHeader = findFirstAvailableHeader(idx, ["VARIANT COMPARE AT PRICE", "COMPARE AT PRICE"]);
+    const capturedAt = new Date();
+
+    const baselineRows = data.slice(1).map(row => {
+      const sku = safeStr(row[idx[skuHeader]]).toUpperCase();
+      if (!sku) return null;
+      const livePrice = safeNum(row[idx[priceHeader]]) || 0;
+      const rawCompare = compareHeader ? safeNum(row[idx[compareHeader]]) : null;
+      const compareMsrp = (rawCompare === null || rawCompare === 0) ? livePrice : rawCompare;
+      const markdown = compareMsrp === 0 || compareMsrp === livePrice ? 0 : (compareMsrp - livePrice) / compareMsrp;
+      return [sku, livePrice, compareMsrp, markdown, getStorefrontBracket(livePrice, compareMsrp), capturedAt];
+    }).filter(row => row !== null);
+
+    const baselineSheet = getOrCreateSheet(VDM_CONFIG.TABS.BASELINE);
+    baselineSheet.clear().clearFormats();
+    const headers = [["SKU Anchor", "Live Price", "Compare MSRP", "Active Markdown %", "Baseline Bracket", "Captured Timestamp"]];
+    baselineSheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
+    applyHeaderStyle(baselineSheet.getRange(1, 1, 1, headers[0].length));
+    if (baselineRows.length > 0) {
+      baselineSheet.getRange(2, 1, baselineRows.length, headers[0].length).setValues(baselineRows);
+      baselineSheet.getRange(2, 2, baselineRows.length, 2).setNumberFormat("0.00");
+      baselineSheet.getRange(2, 4, baselineRows.length, 1).setNumberFormat("0.00%");
+      baselineSheet.getRange(2, 6, baselineRows.length, 1).setNumberFormat("yyyy-mm-dd hh:mm:ss");
+    }
+    baselineSheet.setFrozenRows(1);
+
+    ui.alert("Pre-Campaign Baseline Frozen Successfully.");
+  } catch (e) {
+    ui.alert("Baseline Freeze Failed: " + e.message);
+  }
+}
+
+function clearPreCampaignBaseline() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const baselineSheet = ss.getSheetByName(VDM_CONFIG.TABS.BASELINE);
+    if (baselineSheet) ss.deleteSheet(baselineSheet);
+    ui.alert("Baseline Snapshot Reset to Dynamic Live Mode.");
+  } catch (e) {
+    ui.alert("Baseline Reset Failed: " + e.message);
   }
 }
