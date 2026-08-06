@@ -33,7 +33,15 @@ function getShopifyMap() {
   if (!rawSheet) return new Map();
   const data = rawSheet.getDataRange().getValues();
   const idx = getHeaderMap(data[0]);
-  return new Map(data.slice(1).map(r => [r[0], { handle: r[idx["HANDLE"]], vendor: r[idx["VENDOR"]] }]));
+  const handleHeader = findFirstAvailableHeader(idx, ["HANDLE"]);
+  const vendorHeader = findFirstAvailableHeader(idx, ["VENDOR"]);
+  return new Map(data.slice(1).map(r => [
+    r[0],
+    {
+      handle: handleHeader ? r[idx[handleHeader]] : "",
+      vendor: vendorHeader ? r[idx[vendorHeader]] : ""
+    }
+  ]));
 }
 
 function generateSummaryTab(ss, rows, idx, shopifyMap) {

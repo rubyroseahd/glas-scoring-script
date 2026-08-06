@@ -82,6 +82,28 @@ Expected source files and workbook tabs include:
 - `EEI WEB Whse Stock Report.csv` → `eei_web_whse` — web warehouse stock
 - `Cost_Data.csv` → `cost_ledger` — procurement cost waterfall
 
+### Accepted CSV header aliases
+
+- `shopify_export_gt.csv`
+  - SKU: `VARIANT SKU` or `SKU`
+  - Status: `STATUS`
+  - Price: `VARIANT PRICE` or `PRICE`
+  - Type: `TYPE` or `PRODUCT TYPE`
+- `Cost_Data.csv`
+  - SKU: `SKU` or `VARIANT SKU`
+  - Cost: `COST`, `UNIT COST`, `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, or `COST PER ITEM`
+- `Total sales by product.csv`
+  - SKU: `PRODUCT VARIANT SKU`, `VARIANT SKU`, or `SKU`
+  - Quantity: `NET QUANTITY`, `NET ITEMS SOLD`, `QTY`, or `QUANTITY`
+- `EEI USA Whse Stock Report.csv` / `EEI WEB Whse Stock Report.csv`
+  - Headers are read from **row 5** (rows 1–4 metadata, row 6+ data)
+  - SKU: `ITEM CODE` or `SKU`
+  - Quantity:
+    - USA: `EEI USA WAREHOUSE ON HAND STOCK`, `QTY`, `QUANTITY`, or `ON HAND STOCK`
+    - WEB: `EEI WEB WAREHOUSE ON HAND STOCK`, `QTY`, `QUANTITY`, or `ON HAND STOCK`
+
+Resolved-cost precedence is: `EEI LAST PURCHASE PRICE` → `GLAS COSTING` → `COTR LAST PURCHASE PRICE` → `COST` → `UNIT COST` → Shopify `COST PER ITEM` → `0`.
+
 ---
 
 ## Operational guardrails
