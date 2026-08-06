@@ -123,11 +123,43 @@ When a gatekeeper condition is met, pricing action is held regardless of composi
 - Keep workbook tab names stable (especially `shopify_90day_sales` for `Total sales by product.csv`) to avoid broken mappings.
 - Treat this README as the behavior contract; update it when scoring logic or thresholds change.
 
+## Quick Start (new operator)
+
+1. Open the target Google Sheet and confirm the Apps Script project contains this repository code.
+2. In `Config.gs`, verify `VDM_CONFIG.FOLDER_ID` points to your operational Drive folder.
+3. Upload these five CSVs into that folder (exact names):
+   - `shopify_export_gt.csv`
+   - `Total sales by product.csv`
+   - `Cost_Data.csv`
+   - `EEI WEB Whse Stock Report.csv`
+   - `EEI USA Whse Stock Report.csv`
+4. Confirm EEI warehouse exports preserve metadata rows 1–4, header row 5, and data from row 6 onward.
+5. In the Google Sheet, open **EEI Pricing Engine Launcher → Advanced Diagnostics → Run Pre-Flight Sanity Check**.
+6. Validate `[01] Control Panel` values:
+   - Column A: Active GWP SKUs
+   - Column B: New Launch Overrides
+   - Column C: MAP Restricted Brands (vendor-level)
+   - Column D: B2B Reserve Min Qty
+   - `E2`: Affiliate coupon rate
+7. Run **EEI Pricing Engine Launcher → 1. Full System Sync (Standard)**.
+8. Review run output and triage:
+   - `[00] Action Items & Sign-off` for queue routing
+   - `[02] Dashboard Matrix` for score, guardrail, and tier fields
+   - `[07] Storefront Update & Sync Audit` for proposed storefront actions
+9. If required, use **Advanced Diagnostics → Emergency Matrix Rollback** to restore `_backup_matrix_data`.
+
 ---
 
 ## Related documentation
 
 - `docs/VDM_Master_Specification.md`
 - `docs/VDM_Scoring_Framework.md`
+- `docs/SOP_Operational_Guide.md`
+- `docs/sample-data/README.md`
+- `docs/UAT_Checklist_Template.md`
+- `docs/Failure_Playbooks.md`
+- `docs/Expected_Output_Contract.md`
+- `docs/Monitoring_Metrics_Guide.md`
+- `CHANGELOG.md`
 
 These docs define the production scoring framework and should stay in sync with script behavior.
