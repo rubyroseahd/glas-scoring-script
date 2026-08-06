@@ -142,7 +142,8 @@ function executeCostResolutionWaterfall() {
     glas: cIdxMap["GLAS COSTING"],
     cotrUpdate: cIdxMap["LAST PURCHASE PRICE REPORT COTR(UPDATE)"],
     cost: cIdxMap["COST"],
-    unitCost: cIdxMap["UNIT COST"]
+    unitCost: cIdxMap["UNIT COST"],
+    costPerItem: cIdxMap["COST PER ITEM"]
   };
 
   const costMap = new Map();
@@ -177,6 +178,7 @@ function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
     getNumericAt(costRow, costIndexes.cotrUpdate),
     getNumericAt(costRow, costIndexes.cost),
     getNumericAt(costRow, costIndexes.unitCost),
+    getNumericAt(costRow, costIndexes.costPerItem),
     shopifyCost
   ];
   for (let i = 0; i < candidates.length; i++) {
