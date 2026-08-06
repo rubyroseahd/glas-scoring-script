@@ -33,7 +33,8 @@ function executeDashboardRefresh() {
     const salesSkuHeader = hasSalesRows ? getFirstAvailableHeader(vIdx, ["SKU_ANCHOR", "PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]) : findFirstAvailableHeader(vIdx, ["SKU_ANCHOR", "PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]);
     const usaSkuHeader = hasUsaRows ? getFirstAvailableHeader(uIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]) : findFirstAvailableHeader(uIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]);
     const webSkuHeader = hasWebRows ? getFirstAvailableHeader(wIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]) : findFirstAvailableHeader(wIdx, ["SKU_ANCHOR", "ITEM CODE", "SKU"]);
-    const costSkuHeader = findFirstAvailableHeader(cIdx, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]);
+    const hasCostRows = costData.length > 1;
+    const costSkuHeader = hasCostRows ? getFirstAvailableHeader(cIdx, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]) : findFirstAvailableHeader(cIdx, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]);
 
     const salesValueHeader = hasSalesRows ? getFirstAvailableHeader(vIdx, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]) : findFirstAvailableHeader(vIdx, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]);
     const webStockHeader = hasWebRows ? getFirstAvailableHeader(wIdx, ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]) : findFirstAvailableHeader(wIdx, ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]);
