@@ -207,8 +207,10 @@ function executeDashboardRefresh() {
       const baselineSnapshot = baselineMap.get(sku);
       const baselinePrice = baselineSnapshot && mathGuard(baselineSnapshot.price) ? baselineSnapshot.price : (price || 0);
       const baselineCompareMsrp = baselineSnapshot && mathGuard(baselineSnapshot.compareMsrp) ? baselineSnapshot.compareMsrp : compareMSRP;
-      const baselineBracket = baselineSnapshot && safeStr(baselineSnapshot.bracket)
-        ? safeStr(baselineSnapshot.bracket)
+      const _storedBracket = baselineSnapshot ? safeStr(baselineSnapshot.bracket) : null;
+      const _canonicalBrackets = Object.values(VDM_CONFIG.BRACKET_NAMES);
+      const baselineBracket = (_storedBracket && _canonicalBrackets.indexOf(_storedBracket) !== -1)
+        ? _storedBracket
         : getStorefrontBracket(baselinePrice, baselineCompareMsrp);
       
       let stackMargin = 0;

@@ -172,6 +172,20 @@ function runRegressionHarness() {
   assertions.push(assertEqual("storefront bracket proven", getStorefrontBracket(58, 100), VDM_CONFIG.BRACKET_NAMES.PROVEN));
   assertions.push(assertEqual("storefront bracket accelerator", getStorefrontBracket(50, 100), VDM_CONFIG.BRACKET_NAMES.ACCELERATOR));
   assertions.push(assertEqual("storefront bracket clearance", getStorefrontBracket(30, 100), VDM_CONFIG.BRACKET_NAMES.CLEARANCE));
+  // Boundary: exactly at 0.35 depth → PROVEN
+  assertions.push(assertEqual("storefront bracket boundary 0.35 exact", getStorefrontBracket(65, 100), VDM_CONFIG.BRACKET_NAMES.PROVEN));
+  // Boundary: exactly at 0.45 depth → ACCELERATOR
+  assertions.push(assertEqual("storefront bracket boundary 0.45 exact", getStorefrontBracket(55, 100), VDM_CONFIG.BRACKET_NAMES.ACCELERATOR));
+  // Boundary: exactly at 0.55 depth → CLEARANCE
+  assertions.push(assertEqual("storefront bracket boundary 0.55 exact", getStorefrontBracket(45, 100), VDM_CONFIG.BRACKET_NAMES.CLEARANCE));
+  // Just below 0.35 → SIGNATURE
+  assertions.push(assertEqual("storefront bracket below 0.35 boundary", getStorefrontBracket(65.01, 100), VDM_CONFIG.BRACKET_NAMES.SIGNATURE));
+  // Just below 0.45 → PROVEN
+  assertions.push(assertEqual("storefront bracket below 0.45 boundary", getStorefrontBracket(55.01, 100), VDM_CONFIG.BRACKET_NAMES.PROVEN));
+  // Just below 0.55 → ACCELERATOR
+  assertions.push(assertEqual("storefront bracket below 0.55 boundary", getStorefrontBracket(45.01, 100), VDM_CONFIG.BRACKET_NAMES.ACCELERATOR));
+  // Negative depth (price > compareMsrp) → HERO
+  assertions.push(assertEqual("storefront bracket negative depth", getStorefrontBracket(120, 100), VDM_CONFIG.BRACKET_NAMES.HERO));
 
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {

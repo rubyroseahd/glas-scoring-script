@@ -100,8 +100,15 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
       compareMsrp !== null ? compareMsrp : (proposedPrice !== null ? proposedPrice : (livePrice || 0))
     );
 
-    const baselineBracket = baselineBracketHeader ? (safeStr(r[idx[baselineBracketHeader]]) || fallbackBaselineBracket) : fallbackBaselineBracket;
-    const targetBracket = targetBracketHeader ? (safeStr(r[idx[targetBracketHeader]]) || fallbackTargetBracket) : fallbackTargetBracket;
+    const _canonicalBrackets = Object.values(VDM_CONFIG.BRACKET_NAMES);
+    const _rawBaselineBracket = baselineBracketHeader ? (safeStr(r[idx[baselineBracketHeader]]) || null) : null;
+    const _rawTargetBracket = targetBracketHeader ? (safeStr(r[idx[targetBracketHeader]]) || null) : null;
+    const baselineBracket = (_rawBaselineBracket && _canonicalBrackets.indexOf(_rawBaselineBracket) !== -1)
+      ? _rawBaselineBracket
+      : fallbackBaselineBracket;
+    const targetBracket = (_rawTargetBracket && _canonicalBrackets.indexOf(_rawTargetBracket) !== -1)
+      ? _rawTargetBracket
+      : fallbackTargetBracket;
 
     if (baselineCounts[baselineBracket] !== undefined) baselineCounts[baselineBracket]++;
     if (targetCounts[targetBracket] !== undefined) targetCounts[targetBracket]++;
