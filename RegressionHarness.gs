@@ -112,6 +112,60 @@ function runRegressionHarness() {
   );
   assertions.push(assertEqual("cost waterfall falls back to shopify cost", shopifyFallbackCost, 17));
 
+  // Case 10: stripDuplicateSuffix removes ` (N)` before extension
+  assertions.push(assertEqual("stripDuplicateSuffix removes (1)", stripDuplicateSuffix("shopify_export_gt (1).csv"), "shopify_export_gt.csv"));
+  assertions.push(assertEqual("stripDuplicateSuffix removes (12)", stripDuplicateSuffix("EEI USA Whse Stock Report (12).csv"), "EEI USA Whse Stock Report.csv"));
+  assertions.push(assertEqual("stripDuplicateSuffix leaves clean filename unchanged", stripDuplicateSuffix("Cost_Data.csv"), "Cost_Data.csv"));
+  assertions.push(assertEqual("stripDuplicateSuffix ignores mid-name parens", stripDuplicateSuffix("report (draft).csv"), "report (draft).csv"));
+  assertions.push(assertEqual("stripDuplicateSuffix handles no extension", stripDuplicateSuffix("report (1)"), "report (1)"));
+
+  // Case 11: findCsvFileInFolder – exact match preferred over fallback
+  const mockFolder = makeMockFolder([
+    { name: "Cost_Data.csv", content: "sku,cost\nA,5" },
+    { name: "Cost_Data (1).csv", content: "sku,cost\nB,6" }
+  ]);
+  const exactFile = findCsvFileInFolder(mockFolder, "Cost_Data.csv");
+  assertions.push(assertEqual("exact match preferred when both exist", exactFile.getName(), "Cost_Data.csv"));
+
+  // Case 11b: findCsvFileInFolder – multiple exact-name matches throws ambiguity error
+  const dupeExactFolder = makeMockFolder([
+    { name: "Cost_Data.csv", content: "sku,cost\nA,5" },
+    { name: "Cost_Data.csv", content: "sku,cost\nB,6" }
+  ]);
+  let dupeExactErr = null;
+  try { findCsvFileInFolder(dupeExactFolder, "Cost_Data.csv"); } catch (e) { dupeExactErr = e.message; }
+  assertions.push(assertCondition("multiple exact-name matches throws ambiguity error",
+    dupeExactErr && dupeExactErr.indexOf("Cost_Data.csv") !== -1 && dupeExactErr.toLowerCase().indexOf("ambiguous") !== -1));
+
+  // Case 12: findCsvFileInFolder – fallback to single suffix variant
+  const fallbackFolder = makeMockFolder([
+    { name: "shopify_export_gt (2).csv", content: "sku\nX" }
+  ]);
+  const fallbackFile = findCsvFileInFolder(fallbackFolder, "shopify_export_gt.csv");
+  assertions.push(assertEqual("fallback resolves single suffix variant", fallbackFile.getName(), "shopify_export_gt (2).csv"));
+
+  // Case 13: findCsvFileInFolder – case-insensitive fallback
+  const caseFolder = makeMockFolder([
+    { name: "EEI WEB Whse Stock Report (1).csv", content: "sku\nY" }
+  ]);
+  const caseFile = findCsvFileInFolder(caseFolder, "EEI WEB Whse Stock Report.csv");
+  assertions.push(assertEqual("case-insensitive fallback matches suffix variant", caseFile.getName(), "EEI WEB Whse Stock Report (1).csv"));
+
+  // Case 14: findCsvFileInFolder – missing file throws configured name
+  let missingErr = null;
+  try { findCsvFileInFolder(makeMockFolder([]), "Cost_Data.csv"); } catch (e) { missingErr = e.message; }
+  assertions.push(assertCondition("missing file error includes configured name", missingErr && missingErr.indexOf("Cost_Data.csv") !== -1));
+
+  // Case 15: findCsvFileInFolder – ambiguous candidates throws listing
+  const ambigFolder = makeMockFolder([
+    { name: "Cost_Data (1).csv", content: "" },
+    { name: "Cost_Data (2).csv", content: "" }
+  ]);
+  let ambigErr = null;
+  try { findCsvFileInFolder(ambigFolder, "Cost_Data.csv"); } catch (e) { ambigErr = e.message; }
+  assertions.push(assertCondition("ambiguous candidates error mentions both files",
+    ambigErr && ambigErr.indexOf("Cost_Data (1).csv") !== -1 && ambigErr.indexOf("Cost_Data (2).csv") !== -1));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
@@ -183,4 +237,38 @@ function assertEqual(name, actual, expected) {
 
 function assertCondition(name, condition) {
   return { name: name, pass: !!condition, actual: !!condition, expected: true };
+}
+
+/**
+ * Creates a lightweight in-memory mock of a Drive Folder for testing
+ * findCsvFileInFolder without requiring live Drive access.
+ * Each entry: { name: string, content: string }
+ */
+function makeMockFolder(entries) {
+  function makeMockFile(entry) {
+    return {
+      getName: function() { return entry.name; },
+      getBlob: function() {
+        return { getDataAsString: function() { return entry.content; } };
+      }
+    };
+  }
+
+  function makeIterator(items) {
+    let idx = 0;
+    return {
+      hasNext: function() { return idx < items.length; },
+      next: function() { return items[idx++]; }
+    };
+  }
+
+  return {
+    getFilesByName: function(name) {
+      const matches = entries.filter(e => e.name === name).map(makeMockFile);
+      return makeIterator(matches);
+    },
+    getFiles: function() {
+      return makeIterator(entries.map(makeMockFile));
+    }
+  };
 }

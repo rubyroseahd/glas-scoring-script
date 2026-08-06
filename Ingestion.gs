@@ -198,11 +198,89 @@ function writeToWorkbookTab(name, data, ss) {
   }
 }
 
+/**
+ * Strips a terminal duplicate-download suffix of the form ` (N)` immediately
+ * before the file extension, where N is one or more digits.
+ * Examples:
+ *   "shopify_export_gt (1).csv"  → "shopify_export_gt.csv"
+ *   "Cost_Data (12).csv"         → "Cost_Data.csv"
+ *   "report.csv"                 → "report.csv" (unchanged)
+ *
+ * @param {string} name - A filename (with or without extension).
+ * @returns {string} The filename with the ` (N)` suffix removed.
+ */
+function stripDuplicateSuffix(name) {
+  return name.replace(/ \(\d+\)(\.[^.]+)$/, "$1");
+}
+
+/**
+ * Locates a CSV file in a Drive folder using exact-match-first semantics,
+ * with a safe case-insensitive fallback that strips duplicate-download suffixes.
+ *
+ * Resolution order:
+ *  1. Exact match via folder.getFilesByName(configuredName) – preferred.
+ *  2. Scan all files in the folder; collect candidates whose name, after
+ *     stripping a ` (N)` suffix and lowercasing, equals the configured name
+ *     lowercased and stripped.
+ *  3. Exactly one candidate → use it.
+ *  4. Zero candidates       → throw a clear missing-file error.
+ *  5. Multiple candidates   → throw an ambiguity error listing every match.
+ *
+ * @param {GoogleAppsScript.Drive.Folder} folder - The Drive folder to search.
+ * @param {string} configuredName - The filename as declared in VDM_CONFIG.SOURCE_FILES.
+ * @returns {GoogleAppsScript.Drive.File} The matched Drive file object.
+ */
+function findCsvFileInFolder(folder, configuredName) {
+  // 1. Exact match (fastest path – no iteration required).
+  const exact = folder.getFilesByName(configuredName);
+  if (exact.hasNext()) {
+    const first = exact.next();
+    if (exact.hasNext()) {
+      // Multiple files share the exact configured name – ambiguous, never choose arbitrarily.
+      const dupes = [first];
+      while (exact.hasNext()) dupes.push(exact.next());
+      const names = dupes.map(f => f.getName()).join(", ");
+      throw new Error(
+        `Ambiguous exact match for "${configuredName}": multiple Drive files share this name (${names}). ` +
+        `Remove duplicate files from the Drive folder and retry.`
+      );
+    }
+    return first;
+  }
+
+  // 2. Fallback: scan folder, normalise, and collect candidates.
+  const normalised = stripDuplicateSuffix(configuredName).toLowerCase();
+  const candidates = [];
+  const allFiles = folder.getFiles();
+  while (allFiles.hasNext()) {
+    const f = allFiles.next();
+    const fn = f.getName();
+    if (stripDuplicateSuffix(fn).toLowerCase() === normalised) {
+      candidates.push(f);
+    }
+  }
+
+  // 3. Single candidate → safe to use.
+  if (candidates.length === 1) return candidates[0];
+
+  // 4. No match at all.
+  if (candidates.length === 0) {
+    throw new Error(`Missing required file: ${configuredName}`);
+  }
+
+  // 5. Ambiguous – list all conflicting names so the operator can resolve.
+  const names = candidates.map(f => f.getName()).join(", ");
+  throw new Error(
+    `Ambiguous file match for "${configuredName}": multiple files resolved to the same base name (${names}). ` +
+    `Remove duplicate files from the Drive folder and retry.`
+  );
+}
+
 function loadCsvFile(folder, fileName) {
-  const files = folder.getFilesByName(fileName);
-  if (!files.hasNext()) throw new Error(`Missing required file: ${fileName}`);
-  const data = Utilities.parseCsv(files.next().getBlob().getDataAsString());
-  if (!data || data.length === 0) throw new Error(`File ${fileName} is empty or malformed.`);
+  const file = findCsvFileInFolder(folder, fileName);
+  const resolvedName = file.getName();
+  const data = Utilities.parseCsv(file.getBlob().getDataAsString());
+  if (!data || data.length === 0) throw new Error(`File ${resolvedName} is empty or malformed.`);
   return data;
 }
 
