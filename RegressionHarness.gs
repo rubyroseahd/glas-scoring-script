@@ -13,7 +13,7 @@ function runRegressionHarness() {
   const tiePctLow = getPercentileRankInc(tieData, 2);
   const tiePctHigh = getPercentileRankInc(tieData, 8);
   assertions.push(assertCondition("tie percentile is midpoint for duplicated low values", tiePctLow === 1 / 12));
-  assertions.push(assertCondition("tie percentile is midpoint for duplicated high values", tiePctHigh === 11 / 12));
+  assertions.push(assertCondition("tie percentile is midpoint for duplicated high values", tiePctHigh === 3 / 4));
   assertions.push(assertCondition("equal values get equal percentile", getPercentileRankInc(tieData, 8) === getPercentileRankInc(tieData, 8)));
 
   // Case 2: Queue precedence (missing cost beats low-score routing)

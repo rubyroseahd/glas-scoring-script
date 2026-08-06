@@ -141,7 +141,8 @@ function executeCostResolutionWaterfall() {
     glas: cIdxMap["GLAS COSTING"],
     cotr: cIdxMap["COTR LAST PURCHASE PRICE"],
     cost: cIdxMap["COST"],
-    unitCost: cIdxMap["UNIT COST"]
+    unitCost: cIdxMap["UNIT COST"],
+    costPerItem: cIdxMap["COST PER ITEM"]
   };
 
   const costMap = new Map();
@@ -158,7 +159,7 @@ function executeCostResolutionWaterfall() {
     const shopifyCost = shopifyCostHeader ? getNumericAt(r, sIdxMap[shopifyCostHeader]) : null;
     const ext = costMap.get(sku);
     const externalCost = ext
-      ? getNumericAt(ext, cIdx.eei) || getNumericAt(ext, cIdx.glas) || getNumericAt(ext, cIdx.cotr) || getNumericAt(ext, cIdx.cost) || getNumericAt(ext, cIdx.unitCost)
+      ? getNumericAt(ext, cIdx.eei) || getNumericAt(ext, cIdx.glas) || getNumericAt(ext, cIdx.cotr) || getNumericAt(ext, cIdx.cost) || getNumericAt(ext, cIdx.unitCost) || getNumericAt(ext, cIdx.costPerItem)
       : null;
     const final = externalCost || shopifyCost || 0;
     resolved.push([sku, safeNum(final)]);
