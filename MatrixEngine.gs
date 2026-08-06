@@ -59,6 +59,27 @@ function executeDashboardRefresh() {
     const costMap = costSkuHeader
       ? new Map(costData.slice(1).map(r => [safeStr(r[cIdx[costSkuHeader]]).toUpperCase(), resolvedCostHeader ? safeNum(r[cIdx[resolvedCostHeader]]) : null]))
       : new Map();
+    const baselineSheet = ss.getSheetByName(VDM_CONFIG.TABS.BASELINE);
+    const baselineData = (baselineSheet && baselineSheet.getLastRow() > 1) ? baselineSheet.getDataRange().getValues() : [];
+    const baselineMap = new Map();
+    if (baselineData.length > 1) {
+      const bIdx = getHeaderMap(baselineData[0]);
+      const baselineSkuHeader = findFirstAvailableHeader(bIdx, ["SKU ANCHOR", "SKU_ANCHOR", "SKU ANCHOR KEY", "SKU", "VARIANT SKU"]);
+      const baselinePriceHeader = findFirstAvailableHeader(bIdx, ["LIVE PRICE", "LIVE STOREFRONT PRICE", "BASELINE STOREFRONT PRICE", "PRICE", "VARIANT PRICE"]);
+      const baselineCompareHeader = findFirstAvailableHeader(bIdx, ["COMPARE MSRP", "LIVE COMPARE MSRP", "VARIANT COMPARE AT PRICE", "COMPARE AT PRICE"]);
+      const baselineBracketHeader = findFirstAvailableHeader(bIdx, ["BASELINE BRACKET", "BASELINE STOREFRONT BRACKET", "STOREFRONT BRACKET", "CURRENT EQUIVALENT STOREFRONT TIER"]);
+      const baselineCostHeader = findFirstAvailableHeader(bIdx, ["RESOLVED COST BASE", "COST", "PROCUREMENT COST"]);
+      baselineData.slice(1).forEach(row => {
+        const skuKey = baselineSkuHeader ? safeStr(row[bIdx[baselineSkuHeader]]).toUpperCase() : "";
+        if (!skuKey) return;
+        baselineMap.set(skuKey, {
+          price: baselinePriceHeader ? safeNum(row[bIdx[baselinePriceHeader]]) : null,
+          compareMsrp: baselineCompareHeader ? safeNum(row[bIdx[baselineCompareHeader]]) : null,
+          bracket: baselineBracketHeader ? safeStr(row[bIdx[baselineBracketHeader]]) : "",
+          cost: baselineCostHeader ? safeNum(row[bIdx[baselineCostHeader]]) : null
+        });
+      });
+    }
     const catalogSkuSet = new Set(
       shopifySkuHeader ? shopifyData.slice(1).map(r => safeStr(r[sIdx[shopifySkuHeader]]).toUpperCase()).filter(Boolean) : []
     );
@@ -183,6 +204,12 @@ function executeDashboardRefresh() {
       const shopifyQty = shopifyQtyHeader ? safeNum(row[sIdx[shopifyQtyHeader]]) || 0 : 0;
       let propPrice = compareMSRP * (1 - vdmMarkdown);
       let simNet = propPrice * (1 - affiliateRate);
+      const baselineSnapshot = baselineMap.get(sku);
+      const baselinePrice = baselineSnapshot && mathGuard(baselineSnapshot.price) ? baselineSnapshot.price : (price || 0);
+      const baselineCompareMsrp = baselineSnapshot && mathGuard(baselineSnapshot.compareMsrp) ? baselineSnapshot.compareMsrp : compareMSRP;
+      const baselineBracket = baselineSnapshot && safeStr(baselineSnapshot.bracket)
+        ? safeStr(baselineSnapshot.bracket)
+        : getStorefrontBracket(baselinePrice, baselineCompareMsrp);
       
       let stackMargin = 0;
       let guardrail = "✓ SAFE";
@@ -224,6 +251,18 @@ function executeDashboardRefresh() {
         stackMargin = simNet === 0 ? 0 : (simNet - cost) / simNet;
       }
 
+      const targetBracket = getStorefrontBracket(propPrice, compareMSRP);
+      let catalogShiftDirection = "✓ Price Hold";
+      if (propPrice > baselinePrice) {
+        catalogShiftDirection = "📈 Price Recovery / Lift";
+      } else if (propPrice === baselinePrice) {
+        catalogShiftDirection = "✓ Price Hold";
+      } else if (propPrice < baselinePrice && vdmMarkdown < 0.65) {
+        catalogShiftDirection = "📉 Controlled Deepen";
+      } else if (propPrice < baselinePrice && vdmMarkdown >= 0.65) {
+        catalogShiftDirection = "🚨 Clearance Escalation";
+      }
+
       // Queue Assignment
       // Queue 1A: Negative base margin audit
       // Queue 1B: Simulated checkout margin guardrail (<20% => ❌ BLOCKED)
@@ -255,7 +294,7 @@ function executeDashboardRefresh() {
 
       stats.total++;
       results.push([
-        sku, gate, gateCode, fulfillment, cost, price, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, tierCode, vdmMarkdown, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, guardrailCode, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin, actionQueue, queueCode
+        sku, gate, gateCode, fulfillment, cost, price, baselinePrice, compareMSRP, curMarkdown, curMargin, units90 || 0, vScore, mScore, sScore, totalScore, tier, tierCode, vdmMarkdown, baselineBracket, targetBracket, catalogShiftDirection, totalStock, webStock, shopifyQty, shopifyQty - webStock, propPrice, simNet, stackMargin, guardrail, guardrailCode, curTierLabel, migration, propPrice - (price || 0), stackMargin - curMargin, actionQueue, queueCode
       ]);
     });
 
@@ -270,7 +309,7 @@ function executeDashboardRefresh() {
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
-    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Gatekeeper Code", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "Tier Code", "VDM Markdown Depth %", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Guardrail Code", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue", "Queue Code"];
+    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Gatekeeper Code", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Baseline Storefront Price", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "Tier Code", "VDM Markdown Depth %", "Baseline Storefront Bracket", "Target VDM Bracket", "Catalog Shift Direction", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Guardrail Code", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue", "Queue Code"];
     
     const headerWidth = dashboardHeaders.length;
     const guardrailColumnIndex = dashboardHeaders.indexOf("Profit Guardrail Status Alert") + 1;

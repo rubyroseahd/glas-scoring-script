@@ -166,6 +166,13 @@ function runRegressionHarness() {
   assertions.push(assertCondition("ambiguous candidates error mentions both files",
     ambigErr && ambigErr.indexOf("Cost_Data (1).csv") !== -1 && ambigErr.indexOf("Cost_Data (2).csv") !== -1));
 
+  // Case 16: storefront bracket segmentation helper
+  assertions.push(assertEqual("storefront bracket hero", getStorefrontBracket(100, 100), VDM_CONFIG.BRACKET_NAMES.HERO));
+  assertions.push(assertEqual("storefront bracket signature", getStorefrontBracket(80, 100), VDM_CONFIG.BRACKET_NAMES.SIGNATURE));
+  assertions.push(assertEqual("storefront bracket proven", getStorefrontBracket(58, 100), VDM_CONFIG.BRACKET_NAMES.PROVEN));
+  assertions.push(assertEqual("storefront bracket accelerator", getStorefrontBracket(50, 100), VDM_CONFIG.BRACKET_NAMES.ACCELERATOR));
+  assertions.push(assertEqual("storefront bracket clearance", getStorefrontBracket(30, 100), VDM_CONFIG.BRACKET_NAMES.CLEARANCE));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
