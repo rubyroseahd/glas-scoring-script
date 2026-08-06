@@ -233,7 +233,20 @@ function stripDuplicateSuffix(name) {
 function findCsvFileInFolder(folder, configuredName) {
   // 1. Exact match (fastest path – no iteration required).
   const exact = folder.getFilesByName(configuredName);
-  if (exact.hasNext()) return exact.next();
+  if (exact.hasNext()) {
+    const first = exact.next();
+    if (exact.hasNext()) {
+      // Multiple files share the exact configured name – ambiguous, never choose arbitrarily.
+      const dupes = [first];
+      while (exact.hasNext()) dupes.push(exact.next());
+      const names = dupes.map(f => f.getName()).join(", ");
+      throw new Error(
+        `Ambiguous exact match for "${configuredName}": multiple Drive files share this name (${names}). ` +
+        `Remove duplicate files from the Drive folder and retry.`
+      );
+    }
+    return first;
+  }
 
   // 2. Fallback: scan folder, normalise, and collect candidates.
   const normalised = stripDuplicateSuffix(configuredName).toLowerCase();
@@ -265,8 +278,9 @@ function findCsvFileInFolder(folder, configuredName) {
 
 function loadCsvFile(folder, fileName) {
   const file = findCsvFileInFolder(folder, fileName);
+  const resolvedName = file.getName();
   const data = Utilities.parseCsv(file.getBlob().getDataAsString());
-  if (!data || data.length === 0) throw new Error(`File ${fileName} is empty or malformed.`);
+  if (!data || data.length === 0) throw new Error(`File ${resolvedName} is empty or malformed.`);
   return data;
 }
 

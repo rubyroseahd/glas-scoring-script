@@ -127,6 +127,16 @@ function runRegressionHarness() {
   const exactFile = findCsvFileInFolder(mockFolder, "Cost_Data.csv");
   assertions.push(assertEqual("exact match preferred when both exist", exactFile.getName(), "Cost_Data.csv"));
 
+  // Case 11b: findCsvFileInFolder – multiple exact-name matches throws ambiguity error
+  const dupeExactFolder = makeMockFolder([
+    { name: "Cost_Data.csv", content: "sku,cost\nA,5" },
+    { name: "Cost_Data.csv", content: "sku,cost\nB,6" }
+  ]);
+  let dupeExactErr = null;
+  try { findCsvFileInFolder(dupeExactFolder, "Cost_Data.csv"); } catch (e) { dupeExactErr = e.message; }
+  assertions.push(assertCondition("multiple exact-name matches throws ambiguity error",
+    dupeExactErr && dupeExactErr.indexOf("Cost_Data.csv") !== -1 && dupeExactErr.toLowerCase().indexOf("ambiguous") !== -1));
+
   // Case 12: findCsvFileInFolder – fallback to single suffix variant
   const fallbackFolder = makeMockFolder([
     { name: "shopify_export_gt (2).csv", content: "sku\nX" }
