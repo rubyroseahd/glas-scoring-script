@@ -67,6 +67,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const targetBracketHeader = findFirstAvailableHeader(idx, ["TARGET VDM BRACKET"]);
   const livePriceHeader = findFirstAvailableHeader(idx, ["LIVE STOREFRONT PRICE"]);
   const baselinePriceHeader = findFirstAvailableHeader(idx, ["BASELINE STOREFRONT PRICE"]);
+  const baselineSkuPresentHeader = findFirstAvailableHeader(idx, ["BASELINE SKU PRESENT"]);
   const compareHeader = findFirstAvailableHeader(idx, ["LIVE COMPARE MSRP"]);
   const proposedPriceHeader = findFirstAvailableHeader(idx, ["NEW PROPOSED STOREFRONT PRICE"]);
   const vdmMarkdownHeader = findFirstAvailableHeader(idx, ["VDM MARKDOWN DEPTH %"]);
@@ -86,6 +87,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   rows.forEach(r => {
     const livePrice = livePriceHeader ? safeNum(r[idx[livePriceHeader]]) : null;
     const baselinePrice = baselinePriceHeader ? safeNum(r[idx[baselinePriceHeader]]) : livePrice;
+    const baselineSkuPresent = baselineSkuPresentHeader ? isBaselineSkuPresentValue(r[idx[baselineSkuPresentHeader]]) : false;
     const compareMsrp = compareHeader ? safeNum(r[idx[compareHeader]]) : null;
     const proposedPrice = proposedPriceHeader ? safeNum(r[idx[proposedPriceHeader]]) : null;
     const units90 = unitsHeader ? (safeNum(r[idx[unitsHeader]]) || 0) : 0;
@@ -114,9 +116,12 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     if (targetCounts[targetBracket] !== undefined) targetCounts[targetBracket]++;
     if ((rowMarkdown || 0) >= 0.65) clearanceCount++;
 
-    if (proposedPrice !== null && baselinePrice !== null) {
-      projectedRevenueImpact90 += (proposedPrice - baselinePrice) * units90;
-    }
+    projectedRevenueImpact90 += getProjectedRevenueImpact90Contribution(
+      baselineSkuPresent,
+      proposedPrice,
+      baselinePrice,
+      units90
+    );
   });
 
   const panelAData = bracketOrder.map(bracketName => {
@@ -230,6 +235,18 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     heroDepletionAlert,
     projectedRevenueImpact90
   };
+}
+
+function isBaselineSkuPresentValue(value) {
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  const normalized = safeStr(value).toUpperCase();
+  return normalized === "TRUE";
+}
+
+function getProjectedRevenueImpact90Contribution(baselineSkuPresent, proposedPrice, baselinePrice, units90) {
+  if (!baselineSkuPresent || !mathGuard(proposedPrice, baselinePrice)) return 0;
+  return (proposedPrice - baselinePrice) * (safeNum(units90) || 0);
 }
 
 /**

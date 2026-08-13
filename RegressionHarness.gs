@@ -195,6 +195,12 @@ function runRegressionHarness() {
   // Negative depth (price > compareMsrp) → HERO
   assertions.push(assertEqual("storefront bracket negative depth", getStorefrontBracket(120, 100), VDM_CONFIG.BRACKET_NAMES.HERO));
 
+  // Case 17: Projected revenue impact includes baseline-present rows and excludes net-new rows
+  const existingBaselineImpact = getProjectedRevenueImpact90Contribution(true, 45, 40, 10);
+  const netNewImpact = getProjectedRevenueImpact90Contribution(false, 45, 40, 10);
+  assertions.push(assertEqual("projected revenue impact includes baseline-present sku", existingBaselineImpact, 50));
+  assertions.push(assertEqual("projected revenue impact excludes net-new sku", netNewImpact, 0));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
