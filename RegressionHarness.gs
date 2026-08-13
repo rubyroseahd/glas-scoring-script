@@ -96,21 +96,29 @@ function runRegressionHarness() {
   );
   assertions.push(assertEqual("cost waterfall priority uses EEI update first", prioritizedCost, 9));
 
-  // Case 8: Cost waterfall skips zero/invalid values and falls through
-  const fallbackCost = resolveWaterfallCost(
-    ["SKU2", 0, -3, "", null, 11],
+  // Case 8: Cost waterfall preserves an explicit numeric zero at the highest-priority column
+  const zeroCost = resolveWaterfallCost(
+    ["SKU2", 0, 5, 8, null, 11],
     { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
     13
   );
-  assertions.push(assertEqual("cost waterfall skips non-positive candidates", fallbackCost, 11));
+  assertions.push(assertEqual("cost waterfall preserves explicit zero at eeiUpdate", zeroCost, 0));
 
-  // Case 9: Shopify cost is final fallback before zero
+  // Case 8b: Negative values and null/empty fall through; first non-negative value wins
+  const fallbackCost = resolveWaterfallCost(
+    ["SKU4", null, -3, "", null, 11],
+    { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
+    13
+  );
+  assertions.push(assertEqual("cost waterfall skips null/negative/empty and selects first non-negative", fallbackCost, 11));
+
+  // Case 9: Shopify cost is final fallback when all procurement columns are null/empty
   const shopifyFallbackCost = resolveWaterfallCost(
-    ["SKU3", 0, null, "", null, 0],
+    ["SKU3", null, null, null, null, null],
     { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
     17
   );
-  assertions.push(assertEqual("cost waterfall falls back to shopify cost", shopifyFallbackCost, 17));
+  assertions.push(assertEqual("cost waterfall falls back to shopify cost when all columns are null", shopifyFallbackCost, 17));
 
   // Case 10: stripDuplicateSuffix removes ` (N)` before extension
   assertions.push(assertEqual("stripDuplicateSuffix removes (1)", stripDuplicateSuffix("shopify_export_gt (1).csv"), "shopify_export_gt.csv"));
