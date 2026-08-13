@@ -183,7 +183,7 @@ function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
   ];
   for (let i = 0; i < candidates.length; i++) {
     const value = candidates[i];
-    if (typeof value === "number" && !isNaN(value) && value > 0) return value;
+    if (typeof value === "number" && !isNaN(value) && value >= 0) return value;
   }
   return 0;
 }
