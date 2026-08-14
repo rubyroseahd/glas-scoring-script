@@ -345,8 +345,8 @@ function applyActionQueueConditionalFormatting(sheet, queueColumnIndex) {
   const existingRules = sheet.getConditionalFormatRules().filter(rule => {
     return !rule.getRanges().some(range =>
       range.getSheet().getSheetId() === sheet.getSheetId() &&
-      range.getColumn() === queueColumnIndex &&
-      range.getNumColumns() === 1
+      range.getColumn() <= queueColumnIndex &&
+      range.getColumn() + range.getNumColumns() - 1 >= queueColumnIndex
     );
   });
 

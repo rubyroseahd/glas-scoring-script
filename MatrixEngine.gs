@@ -345,8 +345,14 @@ function executeDashboardRefresh() {
     }
     dashSheet.setFrozenRows(1);
     dashSheet.setFrozenColumns(4);
+    const machineOnlyHeaders = ["Gatekeeper Code", "Baseline SKU Present", "Tier Code", "Guardrail Code", "Queue Code"];
     dashboardHeaders.forEach((header, index) => {
-      if (["Gatekeeper Code", "Baseline SKU Present", "Tier Code", "Guardrail Code", "Queue Code"].indexOf(header) !== -1) {
+      if (machineOnlyHeaders.indexOf(header) !== -1) {
+        dashSheet.showColumns(index + 1);
+      }
+    });
+    dashboardHeaders.forEach((header, index) => {
+      if (machineOnlyHeaders.indexOf(header) !== -1) {
         dashSheet.hideColumns(index + 1);
       }
     });
