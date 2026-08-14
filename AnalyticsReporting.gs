@@ -166,6 +166,10 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
         sheet.getRange(3, columnIndex + 1, panelAData.length, 1).setNumberFormat("0.00%");
       }
     });
+    const netSkuShiftIndex = panelAHeaderMap[safeStr("Net SKU Shift").toUpperCase()];
+    if (netSkuShiftIndex !== undefined) {
+      sheet.getRange(3, netSkuShiftIndex + 1, panelAData.length, 1).setNumberFormat("0");
+    }
   }
 
   // --- PANEL B: GLÄS & GLASTOY PROPRIETARY CATALOG DELTA PANEL ---
