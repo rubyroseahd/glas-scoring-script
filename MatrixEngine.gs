@@ -312,17 +312,30 @@ function executeDashboardRefresh() {
 
     // 2. Batch Write
     dashSheet.clear().clearFormats();
-    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Gatekeeper Code", "Fulfillment Tag", "Resolved Cost Base", "Live Storefront Price", "Baseline Storefront Price", "Baseline SKU Present", "Live Compare MSRP", "Active Storefront Markdown Depth %", "Current Gross Margin %", "Raw 90D Retail Velocity", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "Tier Code", "VDM Markdown Depth %", "Baseline Storefront Bracket", "Target VDM Bracket", "Catalog Shift Direction", "Total On-Hand Warehouse Stock", "EEI Web Warehouse On Hand Stock", "Live Storefront Shopify Qty", "Asynchronous Inventory Drift Tracker", "New Proposed Storefront Price", "Simulated Checkout Net Price", "Final Simulated Stacked Margin %", "Profit Guardrail Status Alert", "Guardrail Code", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Retail Price Shift ($)", "Net Margin Change %", "Action Queue", "Queue Code"];
+    const dashboardHeaders = ["SKU Anchor Key", "Gatekeeper Status", "Gatekeeper Code", "Fulfillment Tag", "Unit Cost", "Variant Price", "Baseline Storefront Price", "Baseline SKU Present", "Compare At Price", "Current Discount %", "Current Margin %", "90-Day Net Items Sold", "Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score", "Target Strategic Tier", "Tier Code", "VDM Markdown Depth %", "Baseline Storefront Bracket", "Target VDM Bracket", "Catalog Shift Direction", "Total Network Stock", "Web On Hand Stock", "Shopify Qty", "Inventory Drift", "Proposed Variant Price", "Simulated Net Price", "Projected Margin %", "Profit Guardrail Status Alert", "Guardrail Code", "Current Equivalent Storefront Tier", "Pricing Migration Status", "Price Shift ($)", "Margin Delta %", "Action Queue", "Queue Code"];
     
     const headerWidth = dashboardHeaders.length;
     const guardrailColumnIndex = dashboardHeaders.indexOf("Profit Guardrail Status Alert") + 1;
     const rowCount = (results && results.length) ? results.length : 0;
+    const dashboardHeaderMap = getHeaderMap(dashboardHeaders);
     const headerRange = dashSheet.getRange(1, 1, 1, headerWidth);
     headerRange.setValues([dashboardHeaders]);
     applyHeaderStyle(headerRange);
     if (rowCount > 0) {
       dashSheet.getRange(2, 1, rowCount, headerWidth).setValues(results);
       dashSheet.getRange(2, 1, rowCount, 1).setNumberFormat("@");
+      ["Unit Cost", "Variant Price", "Baseline Storefront Price", "Compare At Price", "Proposed Variant Price", "Simulated Net Price", "Price Shift ($)"].forEach(header => {
+        const columnIndex = dashboardHeaderMap[safeStr(header).toUpperCase()];
+        if (columnIndex !== undefined) {
+          dashSheet.getRange(2, columnIndex + 1, rowCount, 1).setNumberFormat("$#,##0.00");
+        }
+      });
+      ["Current Discount %", "Current Margin %", "VDM Markdown Depth %", "Projected Margin %", "Margin Delta %"].forEach(header => {
+        const columnIndex = dashboardHeaderMap[safeStr(header).toUpperCase()];
+        if (columnIndex !== undefined) {
+          dashSheet.getRange(2, columnIndex + 1, rowCount, 1).setNumberFormat("0.00%");
+        }
+      });
       applyConditionalFormatting(dashSheet, rowCount, headerWidth, guardrailColumnIndex);
 
       // Automated Recovery Point Sync
@@ -331,6 +344,18 @@ function executeDashboardRefresh() {
       dashSheet.getDataRange().copyTo(backupSheet.getRange(1,1));
     }
     dashSheet.setFrozenRows(1);
+    dashSheet.setFrozenColumns(4);
+    const machineOnlyHeaders = ["Gatekeeper Code", "Baseline SKU Present", "Tier Code", "Guardrail Code", "Queue Code"];
+    dashboardHeaders.forEach((header, index) => {
+      if (machineOnlyHeaders.indexOf(header) !== -1) {
+        dashSheet.showColumns(index + 1);
+      }
+    });
+    dashboardHeaders.forEach((header, index) => {
+      if (machineOnlyHeaders.indexOf(header) !== -1) {
+        dashSheet.hideColumns(index + 1);
+      }
+    });
 
     return { rows: results, headers: dashboardHeaders, stats };
   } catch (e) {
