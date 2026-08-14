@@ -46,9 +46,27 @@ function getShopifyMap() {
   ]));
 }
 
+function getDashboardReportHeaders(idx) {
+  return {
+    livePrice: findFirstAvailableHeader(idx, ["VARIANT PRICE", "LIVE STOREFRONT PRICE"]),
+    compareAtPrice: findFirstAvailableHeader(idx, ["COMPARE AT PRICE", "LIVE COMPARE MSRP"]),
+    proposedPrice: findFirstAvailableHeader(idx, ["PROPOSED VARIANT PRICE", "NEW PROPOSED STOREFRONT PRICE"]),
+    unitsSold90: findFirstAvailableHeader(idx, ["90-DAY NET ITEMS SOLD", "RAW 90D RETAIL VELOCITY"]),
+    currentDiscount: findFirstAvailableHeader(idx, ["CURRENT DISCOUNT %", "ACTIVE STOREFRONT MARKDOWN DEPTH %"]),
+    currentMargin: findFirstAvailableHeader(idx, ["CURRENT MARGIN %", "CURRENT GROSS MARGIN %"]),
+    projectedMargin: findFirstAvailableHeader(idx, ["PROJECTED MARGIN %", "FINAL SIMULATED STACKED MARGIN %"]),
+    unitCost: findFirstAvailableHeader(idx, ["UNIT COST", "RESOLVED COST BASE"]),
+    simulatedNetPrice: findFirstAvailableHeader(idx, ["SIMULATED NET PRICE", "SIMULATED CHECKOUT NET PRICE"]),
+    marginDelta: findFirstAvailableHeader(idx, ["MARGIN DELTA %", "NET MARGIN CHANGE %"]),
+    totalNetworkStock: findFirstAvailableHeader(idx, ["TOTAL NETWORK STOCK", "TOTAL ON-HAND WAREHOUSE STOCK"]),
+    priceShift: findFirstAvailableHeader(idx, ["PRICE SHIFT ($)", "RETAIL PRICE SHIFT ($)"])
+  };
+}
+
 function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SUMMARY) || ss.insertSheet(VDM_CONFIG.TABS.SUMMARY);
   sheet.clear().clearFormats();
+  const dashboardHeaders = getDashboardReportHeaders(idx);
   
   const settingsData = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS).getDataRange().getValues();
   const globalAffiliateRate = (settingsData.length > 1 && safeNum(settingsData[1][4]) !== null) ? safeNum(settingsData[1][4]) : 0.15;
@@ -65,13 +83,13 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
 
   const baselineBracketHeader = findFirstAvailableHeader(idx, ["BASELINE STOREFRONT BRACKET"]);
   const targetBracketHeader = findFirstAvailableHeader(idx, ["TARGET VDM BRACKET"]);
-  const livePriceHeader = findFirstAvailableHeader(idx, ["LIVE STOREFRONT PRICE"]);
+  const livePriceHeader = dashboardHeaders.livePrice;
   const baselinePriceHeader = findFirstAvailableHeader(idx, ["BASELINE STOREFRONT PRICE"]);
   const baselineSkuPresentHeader = findFirstAvailableHeader(idx, ["BASELINE SKU PRESENT"]);
-  const compareHeader = findFirstAvailableHeader(idx, ["LIVE COMPARE MSRP"]);
-  const proposedPriceHeader = findFirstAvailableHeader(idx, ["NEW PROPOSED STOREFRONT PRICE"]);
+  const compareHeader = dashboardHeaders.compareAtPrice;
+  const proposedPriceHeader = dashboardHeaders.proposedPrice;
   const vdmMarkdownHeader = findFirstAvailableHeader(idx, ["VDM MARKDOWN DEPTH %"]);
-  const unitsHeader = findFirstAvailableHeader(idx, ["RAW 90D RETAIL VELOCITY"]);
+  const unitsHeader = dashboardHeaders.unitsSold90;
 
   const totalRows = rows.length;
   const baselineCounts = {};
@@ -140,9 +158,15 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   applyHeaderStyle(sheet.getRange(2, 1, 1, panelAWidth));
   sheet.getRange(3, 1, panelAData.length, panelAWidth).setValues(panelAData);
 
-  [3, 5, 7].forEach(col => {
-    sheet.getRange(3, col, panelAData.length, 1).setNumberFormat("0.00%");
-  });
+  if (panelAData.length > 0) {
+    const panelAHeaderMap = getHeaderMap(panelAHeaders);
+    ["Baseline Catalog %", "VDM Proposed Catalog %", "Net Catalog Shift %"].forEach(header => {
+      const columnIndex = panelAHeaderMap[safeStr(header).toUpperCase()];
+      if (columnIndex !== undefined) {
+        sheet.getRange(3, columnIndex + 1, panelAData.length, 1).setNumberFormat("0.00%");
+      }
+    });
+  }
 
   // --- PANEL B: GLÄS & GLASTOY PROPRIETARY CATALOG DELTA PANEL ---
   const proprietaryBrackets = [
@@ -163,7 +187,7 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
   const panelBHeaders = ["Proprietary Bracket", "Shopify Count", "Shopify %", "VDM Count", "VDM %", "Shift %", "Base %", "Stacked %"];
   
   let panelBData = totalHouseRows === 0 ? [] : proprietaryBrackets.map(b => {
-    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx["ACTIVE STOREFRONT MARKDOWN DEPTH %"]]) ?? 0)).length;
+    const shopCount = houseRows.filter(r => b.shopCheck(safeNum(r[idx[dashboardHeaders.currentDiscount]]) ?? 0)).length;
     const vdmCount = houseRows.filter(r => r[idx["TARGET STRATEGIC TIER"]].startsWith(b.vdmMatch)).length;
     
     const shopPct = totalHouseRows > 0 ? shopCount / totalHouseRows : 0;
@@ -224,6 +248,10 @@ function generateSummaryTab(ss, rows, idx, shopifyMap) {
     Logger.log(`[EXEC WARNING] Hero pool shrinkage ${heroShrinkage.toFixed(4)} exceeds threshold ${VDM_CONFIG.HERO_POOL_MIN_WARN.toFixed(4)}.`);
   }
 
+  const usedWidth = Math.max(panelAWidth, panelBWidth, 2);
+  if (usedWidth > 0) sheet.autoResizeColumns(1, usedWidth);
+  sheet.getRange(2, 1, 1, panelAWidth).setFontWeight("bold").setHorizontalAlignment("center");
+
   return {
     clearanceCount,
     totalRows,
@@ -259,6 +287,7 @@ function getProjectedRevenueImpact90Contribution(baselineSkuPresent, proposedPri
 function generateActionItems(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.ACTION) || ss.insertSheet(VDM_CONFIG.TABS.ACTION);
   sheet.clear().clearFormats();
+  const dashboardHeaders = getDashboardReportHeaders(idx);
 
   const headers = ["Queue", "SKU", "Handle", "Vendor", "Fulfillment", "Total Score", "Current Margin %", "Stacked Margin %", "Guardrail", "Target Tier", "Proposed Price", "Action Required"];
   const width = headers.length;
@@ -271,8 +300,8 @@ function generateActionItems(ss, rows, idx, shopifyMap) {
       if (!queue) return null;
       const sku = r[idx["SKU ANCHOR KEY"]];
       const meta = shopifyMap.get(sku) || {};
-      const curMargin = safeNum(r[idx["CURRENT GROSS MARGIN %"]]) || 0;
-      const stackMargin = safeNum(r[idx["FINAL SIMULATED STACKED MARGIN %"]]) || 0;
+      const curMargin = safeNum(r[idx[dashboardHeaders.currentMargin]]) || 0;
+      const stackMargin = safeNum(r[idx[dashboardHeaders.projectedMargin]]) || 0;
       let actionRequired = "";
       if (queue.startsWith("Queue 1A")) {
         actionRequired = "Flag for cost audit — base margin is negative";
@@ -287,7 +316,7 @@ function generateActionItems(ss, rows, idx, shopifyMap) {
         queue, sku, meta.handle || "", meta.vendor || "",
         r[idx["FULFILLMENT TAG"]], r[idx["TOTAL COMPOSITE SCORE"]],
         curMargin, stackMargin, r[idx["PROFIT GUARDRAIL STATUS ALERT"]],
-        r[idx["TARGET STRATEGIC TIER"]], r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+        r[idx["TARGET STRATEGIC TIER"]], r[idx[dashboardHeaders.proposedPrice]],
         actionRequired
       ];
     })
@@ -295,15 +324,61 @@ function generateActionItems(ss, rows, idx, shopifyMap) {
 
   if (actionRows.length > 0) {
     sheet.getRange(2, 1, actionRows.length, width).setValues(actionRows);
-    sheet.getRange(2, 7, actionRows.length, 2).setNumberFormat("0.00%");
-    sheet.getRange(2, 11, actionRows.length, 1).setNumberFormat("0.00");
+    const headerMap = getHeaderMap(headers);
+    ["Current Margin %", "Stacked Margin %"].forEach(header => {
+      const columnIndex = headerMap[safeStr(header).toUpperCase()];
+      if (columnIndex !== undefined) {
+        sheet.getRange(2, columnIndex + 1, actionRows.length, 1).setNumberFormat("0.00%");
+      }
+    });
+    const proposedPriceColumnIndex = headerMap["PROPOSED PRICE"];
+    if (proposedPriceColumnIndex !== undefined) {
+      sheet.getRange(2, proposedPriceColumnIndex + 1, actionRows.length, 1).setNumberFormat("$#,##0.00");
+    }
   }
   sheet.setFrozenRows(1);
+  applyActionQueueConditionalFormatting(sheet, 1);
+}
+
+function applyActionQueueConditionalFormatting(sheet, queueColumnIndex) {
+  const queueRange = sheet.getRange(2, queueColumnIndex, Math.max(sheet.getMaxRows() - 1, 1), 1);
+  const existingRules = sheet.getConditionalFormatRules().filter(rule => {
+    return !rule.getRanges().some(range =>
+      range.getSheet().getSheetId() === sheet.getSheetId() &&
+      range.getColumn() === queueColumnIndex &&
+      range.getNumColumns() === 1
+    );
+  });
+
+  const queueRules = [
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextStartsWith("Queue 1")
+      .setBackground("#FCE8E6")
+      .setFontColor("#A51D24")
+      .setBold(true)
+      .setRanges([queueRange])
+      .build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextStartsWith("Queue 2")
+      .setBackground("#FEF7E0")
+      .setFontColor("#B06000")
+      .setRanges([queueRange])
+      .build(),
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenTextStartsWith("Queue 3")
+      .setBackground("#F1F3F4")
+      .setFontColor("#3C4043")
+      .setRanges([queueRange])
+      .build()
+  ];
+
+  sheet.setConditionalFormatRules(existingRules.concat(queueRules));
 }
 
 function generateSyncAudit(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SYNC_AUDIT) || ss.insertSheet(VDM_CONFIG.TABS.SYNC_AUDIT);
   sheet.clear().clearFormats();
+  const dashboardHeaders = getDashboardReportHeaders(idx);
 
   // Revised Schema Layer 3
   const headers = ["SKU Key", "Handle", "Action", "Strategy Tier", "VDM Markdown %", "Old Price", "New Price", "Old MSRP", "New MSRP", "Base Price", "Guardrail"];
@@ -316,7 +391,7 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
     const action = (status === "✓ Price Hold" || status === "⚠️ HOLD: B2B Volume Stable")
       ? "NO CHANGE"
       : "UPDATED";
-    const currentMsrp = r[idx["LIVE COMPARE MSRP"]];
+    const currentMsrp = r[idx[dashboardHeaders.compareAtPrice]];
     const nextMsrp = mkdn === 0 ? "" : currentMsrp;
 
     return [
@@ -325,8 +400,8 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
       action,
       r[idx["TARGET STRATEGIC TIER"]],
       mkdn,
-      r[idx["LIVE STOREFRONT PRICE"]],
-      r[idx["NEW PROPOSED STOREFRONT PRICE"]],
+      r[idx[dashboardHeaders.livePrice]],
+      r[idx[dashboardHeaders.proposedPrice]],
       currentMsrp,
       nextMsrp,
       currentMsrp,
@@ -350,6 +425,7 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
 function generateMasterLedger(ss, rows, idx, shopifyMap) {
   const sheet = getOrCreateSheet(VDM_CONFIG.TABS.MASTER_LEDGER);
   sheet.clear().clearFormats();
+  const dashboardHeaders = getDashboardReportHeaders(idx);
 
   const headers = ["SKU Key", "Handle", "Fulfillment", "Gatekeeper", "Migration Status", "Tier", "Target Mkdn %", "Old Price", "New Price", "Price Shift ($)", "Procurement Cost", "Checkout Price", "Stacked Margin %", "Guardrail", "Margin Shift %"];
   
@@ -358,9 +434,9 @@ function generateMasterLedger(ss, rows, idx, shopifyMap) {
       r[idx["SKU ANCHOR KEY"]], shopifyMap.get(r[idx["SKU ANCHOR KEY"]])?.handle || "",
       r[idx["FULFILLMENT TAG"]], r[idx["GATEKEEPER STATUS"]],
       r[idx["PRICING MIGRATION STATUS"]], r[idx["TARGET STRATEGIC TIER"]], r[idx["VDM MARKDOWN DEPTH %"]],
-      r[idx["LIVE STOREFRONT PRICE"]], r[idx["NEW PROPOSED STOREFRONT PRICE"]], r[idx["RETAIL PRICE SHIFT ($)"]],
-      r[idx["RESOLVED COST BASE"]], r[idx["SIMULATED CHECKOUT NET PRICE"]], r[idx["FINAL SIMULATED STACKED MARGIN %"]],
-      r[idx["PROFIT GUARDRAIL STATUS ALERT"]], r[idx["NET MARGIN CHANGE %"]]
+      r[idx[dashboardHeaders.livePrice]], r[idx[dashboardHeaders.proposedPrice]], r[idx[dashboardHeaders.priceShift]],
+      r[idx[dashboardHeaders.unitCost]], r[idx[dashboardHeaders.simulatedNetPrice]], r[idx[dashboardHeaders.projectedMargin]],
+      r[idx["PROFIT GUARDRAIL STATUS ALERT"]], r[idx[dashboardHeaders.marginDelta]]
     ];
   });
 
@@ -380,13 +456,14 @@ function generateMasterLedger(ss, rows, idx, shopifyMap) {
 function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.SCORECARD) || ss.insertSheet(VDM_CONFIG.TABS.SCORECARD);
   sheet.clear().clearFormats();
+  const dashboardHeaders = getDashboardReportHeaders(idx);
 
   const vendorTotals = {};
   rows.forEach(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
     const vendor = shopifyMap.get(sku)?.vendor || "Unknown Vendor";
-    const stockVal = (safeNum(r[idx["TOTAL ON-HAND WAREHOUSE STOCK"]]) || 0) * (safeNum(r[idx["RESOLVED COST BASE"]]) || 0);
-    const units90 = safeNum(r[idx["RAW 90D RETAIL VELOCITY"]]) || 0; 
+    const stockVal = (safeNum(r[idx[dashboardHeaders.totalNetworkStock]]) || 0) * (safeNum(r[idx[dashboardHeaders.unitCost]]) || 0);
+    const units90 = safeNum(r[idx[dashboardHeaders.unitsSold90]]) || 0; 
 
     if (!vendorTotals[vendor]) vendorTotals[vendor] = { skus: 0, stockValue: 0, sales90: 0 };
     vendorTotals[vendor].skus++;
@@ -411,13 +488,14 @@ function generateSupplierScorecard(ss, rows, idx, shopifyMap) {
 function logElasticitySnapshot(ss, rows, idx) {
   const sheet = ss.getSheetByName(VDM_CONFIG.TABS.ELASTICITY) || ss.insertSheet(VDM_CONFIG.TABS.ELASTICITY);
   const date = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+  const dashboardHeaders = getDashboardReportHeaders(idx);
   
   const snapshot = rows.map(r => [
     date,
     r[idx["SKU ANCHOR KEY"]],
     r[idx["VDM MARKDOWN DEPTH %"]],
-    r[idx["SIMULATED CHECKOUT NET PRICE"]],
-    r[idx["RAW 90D RETAIL VELOCITY"]]
+    r[idx[dashboardHeaders.simulatedNetPrice]],
+    r[idx[dashboardHeaders.unitsSold90]]
   ]);
   
   const snapshotHeaders = ["Snapshot Date", "SKU", "Markdown Depth", "Price", "Velocity"];
