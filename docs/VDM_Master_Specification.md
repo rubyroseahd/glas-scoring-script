@@ -159,6 +159,8 @@ If a SHARED SKU has:
 
 Queue 1A missing-cost errors take precedence, followed by Queue 1A negative-margin audits, Queue 1B margin floor violations, B2B reserve holds, then Queue 2/3.
 
+- **Virtual Layer Override:** The engine contains a hardcoded intercept for web-exclusive items. Any SKU beginning with `GLAS-WEB` is automatically reclassified as `WEBONLY`, overriding any default `SHARED` tags imported from the Shopify CSV. This ensures virtual inventory is routed to digital review rather than physical clearance.
+
 ---
 
 ## 8. Dashboard Matrix Columns (28 Columns)

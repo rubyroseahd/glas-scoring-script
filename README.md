@@ -112,6 +112,7 @@ The script supports gatekeeper holds that override standard tier markdown behavi
 
 - Active GWP promo hold (markdown freeze)
 - New launch hold (markdown freeze)
+- Fulfillment overrides: SKUs with the `GLAS-WEB` prefix are automatically forced into the `WEBONLY` digital layer.
 
 When a gatekeeper condition is met, pricing action is held regardless of composite score.
 
