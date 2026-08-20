@@ -365,8 +365,8 @@ function executeDashboardRefresh() {
 
     // --- Collapsible Column Groups ---
     const groupDefs = [
-      { name: "The Math",      headers: ["Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score"] },
-      { name: "The Logistics", headers: ["Total Network Stock", "Web On Hand Stock", "Shopify Qty", "Inventory Drift"] }
+      { headers: ["Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score"] },
+      { headers: ["Total Network Stock", "Web On Hand Stock", "Shopify Qty", "Inventory Drift"] }
     ];
     groupDefs.forEach(groupDef => {
       // Resolve 1-based column positions for the requested headers
@@ -392,16 +392,31 @@ function executeDashboardRefresh() {
       runs.push([runStart, runEnd]);
       runs.forEach(([start, end]) => {
         // Remove any existing group depth to avoid accumulation across refreshes
+        let existing = null;
         try {
-          const existing = dashSheet.getColumnGroup(start, 1);
-          if (existing) {
-            dashSheet.getRange(1, start, 1, end - start + 1).shiftColumnGroupDepth(-existing.getDepth());
+          existing = dashSheet.getColumnGroup(start, 1);
+        } catch (err) {
+          const message = safeStr(err && err.message).toLowerCase();
+          if (message.indexOf("no group") === -1) {
+            throw err;
           }
-        } catch (_) {}
+        }
+        if (existing) {
+          dashSheet.getRange(1, start, 1, end - start + 1).shiftColumnGroupDepth(-existing.getDepth());
+        }
         dashSheet.getRange(1, start, 1, end - start + 1).shiftColumnGroupDepth(1);
+        let columnGroup = null;
         try {
-          dashSheet.getColumnGroup(start, 1).collapse();
-        } catch (_) {}
+          columnGroup = dashSheet.getColumnGroup(start, 1);
+        } catch (err) {
+          const message = safeStr(err && err.message).toLowerCase();
+          if (message.indexOf("no group") === -1) {
+            throw err;
+          }
+        }
+        if (columnGroup) {
+          columnGroup.collapse();
+        }
       });
     });
 
