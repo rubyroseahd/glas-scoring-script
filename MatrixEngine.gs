@@ -339,6 +339,12 @@ function executeDashboardRefresh() {
         }
       });
       applyConditionalFormatting(dashSheet, rowCount, headerWidth, guardrailColumnIndex);
+      ["90-Day Net Items Sold", "Total Network Stock", "Web On Hand Stock", "Shopify Qty", "Inventory Drift"].forEach(header => {
+        const columnIndex = dashboardHeaderMap[safeStr(header).toUpperCase()];
+        if (columnIndex !== undefined) {
+          dashSheet.getRange(2, columnIndex + 1, rowCount, 1).setNumberFormat('#,##0;-#,##0;"-"');
+        }
+      });
 
       // Automated Recovery Point Sync
       const backupSheet = getOrCreateSheet(VDM_CONFIG.TABS.BACKUP, true);
@@ -357,6 +363,63 @@ function executeDashboardRefresh() {
       if (machineOnlyHeaders.indexOf(header) !== -1) {
         dashSheet.hideColumns(index + 1);
       }
+    });
+
+    // --- Collapsible Column Groups ---
+    const groupDefs = [
+      { headers: ["Retail Velocity Score Component", "Margin Score Component", "Retail Stock Score Component", "Total Composite Score"] },
+      { headers: ["Total Network Stock", "Web On Hand Stock", "Shopify Qty", "Inventory Drift"] }
+    ];
+    groupDefs.forEach(groupDef => {
+      // Resolve 1-based column positions for the requested headers
+      const positions = groupDef.headers
+        .map(h => dashboardHeaderMap[safeStr(h).toUpperCase()])
+        .filter(idx => idx !== undefined)
+        .map(idx => idx + 1)
+        .sort((a, b) => a - b);
+      if (positions.length === 0) return;
+      // Group each contiguous run of columns separately
+      let runStart = positions[0];
+      let runEnd = positions[0];
+      const runs = [];
+      for (let i = 1; i < positions.length; i++) {
+        if (positions[i] === runEnd + 1) {
+          runEnd = positions[i];
+        } else {
+          runs.push([runStart, runEnd]);
+          runStart = positions[i];
+          runEnd = positions[i];
+        }
+      }
+      runs.push([runStart, runEnd]);
+      runs.forEach(([start, end]) => {
+        // Remove any existing group depth to avoid accumulation across refreshes
+        let existing = null;
+        try {
+          existing = dashSheet.getColumnGroup(start, 1);
+        } catch (err) {
+          const message = safeStr(err && err.message).toLowerCase();
+          if (message.indexOf("no group") === -1) {
+            throw err;
+          }
+        }
+        if (existing) {
+          dashSheet.getRange(1, start, 1, end - start + 1).shiftColumnGroupDepth(-existing.getDepth());
+        }
+        dashSheet.getRange(1, start, 1, end - start + 1).shiftColumnGroupDepth(1);
+        let columnGroup = null;
+        try {
+          columnGroup = dashSheet.getColumnGroup(start, 1);
+        } catch (err) {
+          const message = safeStr(err && err.message).toLowerCase();
+          if (message.indexOf("no group") === -1) {
+            throw err;
+          }
+        }
+        if (columnGroup) {
+          columnGroup.collapse();
+        }
+      });
     });
 
     return { rows: results, headers: dashboardHeaders, stats };
