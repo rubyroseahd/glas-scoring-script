@@ -108,10 +108,11 @@ Resolved-cost precedence is: `EEI LAST PURCHASE PRICE` → `GLAS COSTING` → `C
 
 ## Operational guardrails
 
-The script supports gatekeeper holds that override standard tier markdown behavior, including:
+The script supports gatekeeper holds and fulfillment overrides that alter standard markdown or routing behavior, including:
 
 - Active GWP promo hold (markdown freeze)
 - New launch hold (markdown freeze)
+- Fulfillment overrides: SKUs with the `GLAS-WEB` prefix are automatically forced into the `WEBONLY` digital layer.
 
 When a gatekeeper condition is met, pricing action is held regardless of composite score.
 

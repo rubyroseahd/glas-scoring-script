@@ -126,8 +126,10 @@ function executeDashboardRefresh() {
       else if (launchSet.has(sku)) { gate = "New Launch"; gateCode = GATEKEEPER_CODES.NEW_LAUNCH; }
       else if (isMapVendorMatch(vendor, mapVendors)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
 
-      const fulfillment = fulfillmentHeader ? (safeStr(row[sIdx[fulfillmentHeader]]).toUpperCase() || "SHARED") : "SHARED";
-      if (!fulfillmentHeader || !safeStr(row[sIdx[fulfillmentHeader]])) stats.fulfillmentFallbackCount++;
+      const rawFulfillment = fulfillmentHeader ? safeStr(row[sIdx[fulfillmentHeader]]) : "";
+      let fulfillment = rawFulfillment.toUpperCase() || "SHARED";
+      if (sku.startsWith("GLAS-WEB")) { fulfillment = "WEBONLY"; }
+      else if (!fulfillmentHeader || !rawFulfillment) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx[shopifyPriceHeader]]);
       const rawCompare = shopifyCompareHeader ? safeNum(row[sIdx[shopifyCompareHeader]]) : null;
