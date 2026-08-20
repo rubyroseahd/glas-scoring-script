@@ -97,6 +97,11 @@ function executeDashboardRefresh() {
       : VDM_CONFIG.AFFILIATE_RATE_DEFAULT;
     // B2B Reserve Min Qty from Settings column D; defaults to 500 if missing or invalid
     const b2bReserveMin = (settingsData.length > 1 && safeNum(settingsData[1][3]) !== null && safeNum(settingsData[1][3]) > 0) ? safeNum(settingsData[1][3]) : 500;
+    // Virtual SKU Prefixes from Settings column F (F2); parse comma-separated list
+    const virtualSkuPrefixesRaw = settingsData.length > 1 ? safeStr(settingsData[1][5]) : "";
+    const virtualSkuPrefixes = virtualSkuPrefixesRaw
+      ? virtualSkuPrefixesRaw.split(",").map(p => p.trim().toUpperCase()).filter(p => p.length > 0)
+      : [];
 
     // Velocity Percentile Setup
     const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
@@ -128,7 +133,7 @@ function executeDashboardRefresh() {
 
       const rawFulfillment = fulfillmentHeader ? safeStr(row[sIdx[fulfillmentHeader]]) : "";
       let fulfillment = rawFulfillment.toUpperCase() || "SHARED";
-      if (sku.startsWith("GLAS-WEB")) { fulfillment = "WEBONLY"; }
+      if (virtualSkuPrefixes.length > 0 && virtualSkuPrefixes.some(prefix => sku.startsWith(prefix))) { fulfillment = "WEBONLY"; }
       else if (!fulfillmentHeader || !rawFulfillment) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx[shopifyPriceHeader]]);
@@ -350,6 +355,14 @@ function executeDashboardRefresh() {
       const backupSheet = getOrCreateSheet(VDM_CONFIG.TABS.BACKUP, true);
       backupSheet.clear();
       dashSheet.getDataRange().copyTo(backupSheet.getRange(1,1));
+    }
+
+    // BI Feed: raw flat table for Looker Studio ingestion
+    const biSheet = getOrCreateSheet(VDM_CONFIG.TABS.BI_FEED, true);
+    biSheet.clear();
+    biSheet.getRange(1, 1, 1, headerWidth).setValues([dashboardHeaders]);
+    if (rowCount > 0) {
+      biSheet.getRange(2, 1, rowCount, headerWidth).setValues(results);
     }
     dashSheet.setFrozenRows(1);
     dashSheet.setFrozenColumns(4);

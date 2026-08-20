@@ -47,8 +47,8 @@ function triggerNuclearArchitectureWipe() {
     
     // Initialize Settings Tab
     const settings = ss.getSheetByName(VDM_CONFIG.TABS.SETTINGS);
-    const settingsHeaders = [["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "B2B Reserve Min Qty", "Affiliate Coupon Rate"]];
-    settings.getRange(1, 1, 1, 5).setValues(settingsHeaders);
+    const settingsHeaders = [["Active GWP SKUs", "New Launch Overrides", "MAP Restricted Brands", "B2B Reserve Min Qty", "Affiliate Coupon Rate", "Virtual SKU Prefixes"]];
+    settings.getRange(1, 1, 1, settingsHeaders[0].length).setValues(settingsHeaders);
     applyHeaderStyle(settings.getRange(1, 1, 1, settingsHeaders[0].length));
     settings.getRange("E2").setValue(0.15).setNumberFormat("0.00%");
     

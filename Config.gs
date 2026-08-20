@@ -39,7 +39,8 @@ const VDM_CONFIG = {
     RAW_SALES: "shopify_90day_sales",
     RAW_COST: "cost_ledger",
     MASTER_COST: "resolved_cost_ledger",
-    BACKUP: "_backup_matrix_data"
+    BACKUP: "_backup_matrix_data",
+    BI_FEED: "_BI_Data_Feed"
   },
 
   DESIGN: {
