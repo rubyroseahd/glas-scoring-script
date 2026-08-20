@@ -133,7 +133,7 @@ function executeDashboardRefresh() {
 
       const rawFulfillment = fulfillmentHeader ? safeStr(row[sIdx[fulfillmentHeader]]) : "";
       let fulfillment = rawFulfillment.toUpperCase() || "SHARED";
-      if (virtualSkuPrefixes.length > 0 && virtualSkuPrefixes.some(prefix => sku.toUpperCase().startsWith(prefix))) { fulfillment = "WEBONLY"; }
+      if (virtualSkuPrefixes.length > 0 && virtualSkuPrefixes.some(prefix => sku.startsWith(prefix))) { fulfillment = "WEBONLY"; }
       else if (!fulfillmentHeader || !rawFulfillment) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx[shopifyPriceHeader]]);
@@ -355,11 +355,13 @@ function executeDashboardRefresh() {
       const backupSheet = getOrCreateSheet(VDM_CONFIG.TABS.BACKUP, true);
       backupSheet.clear();
       dashSheet.getDataRange().copyTo(backupSheet.getRange(1,1));
+    }
 
-      // BI Feed: raw flat table for Looker Studio ingestion
-      const biSheet = getOrCreateSheet(VDM_CONFIG.TABS.BI_FEED, true);
-      biSheet.clear();
-      biSheet.getRange(1, 1, 1, headerWidth).setValues([dashboardHeaders]);
+    // BI Feed: raw flat table for Looker Studio ingestion
+    const biSheet = getOrCreateSheet(VDM_CONFIG.TABS.BI_FEED, true);
+    biSheet.clear();
+    biSheet.getRange(1, 1, 1, headerWidth).setValues([dashboardHeaders]);
+    if (rowCount > 0) {
       biSheet.getRange(2, 1, rowCount, headerWidth).setValues(results);
     }
     dashSheet.setFrozenRows(1);
