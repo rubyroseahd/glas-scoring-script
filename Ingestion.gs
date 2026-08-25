@@ -5,7 +5,7 @@
 function runDataIngestion() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
+    const folder = DriveApp.getFolderById(getOperationalFolderId());
 
     validateHeaders(folder);
     ingestShopify(folder, ss);

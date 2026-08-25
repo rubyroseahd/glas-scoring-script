@@ -127,7 +127,10 @@ When a gatekeeper condition is met, pricing action is held regardless of composi
 ## Quick Start (new operator)
 
 1. Open the target Google Sheet and confirm the Apps Script project contains this repository code.
-2. In `Config.gs`, verify `VDM_CONFIG.FOLDER_ID` points to your operational Drive folder.
+2. Set the Script Property `VDM_FOLDER_ID` to the Drive folder ID that contains the five source CSV files.
+   - In the Apps Script editor: **Project Settings → Script properties → Add script property**
+   - Property name: `VDM_FOLDER_ID`  |  Value: your Drive folder ID
+   - `VDM_CONFIG.FOLDER_ID` in `Config.gs` is intentionally empty and is only retained as a backward-compatible fallback.
 3. Upload these five CSVs into that folder (exact names):
    - `shopify_export_gt.csv`
    - `Total sales by product.csv`

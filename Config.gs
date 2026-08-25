@@ -9,7 +9,7 @@ const VDM_CONFIG = {
   PROFIT_FLOOR_GUARDRAIL: 0.20,
   CLEARANCE_CAP_WARN: 0.20,
   HERO_POOL_MIN_WARN: 0.15,
-  FOLDER_ID: "1m1BoV4XOYoHSCu1QeOOddmcOdNLUGdlh",
+  FOLDER_ID: "",
   
   SOURCE_FILES: {
     SHOPIFY: "shopify_export_gt.csv",
@@ -162,4 +162,40 @@ function safeNum(val) {
  */
 function mathGuard(...values) {
   return values.every(v => typeof v === 'number' && v !== null && !isNaN(v));
+}
+
+/**
+ * Pure helper: resolves an operational folder ID from a property value and a
+ * legacy config value. Separated from PropertiesService for testability.
+ *
+ * @param {string|null} propertyValue  Value from Script Property VDM_FOLDER_ID.
+ * @param {string}      legacyValue    Value from VDM_CONFIG.FOLDER_ID.
+ * @returns {string} The resolved folder ID.
+ * @throws {Error} If neither source yields a non-empty ID.
+ */
+function resolveOperationalFolderId(propertyValue, legacyValue) {
+  const resolved = (propertyValue && propertyValue.trim()) || (legacyValue && legacyValue.trim()) || "";
+  if (!resolved) {
+    throw new Error(
+      "Missing VDM Drive folder configuration. " +
+      "Set Script Property VDM_FOLDER_ID to the Drive folder ID, " +
+      "or configure VDM_CONFIG.FOLDER_ID as a legacy fallback."
+    );
+  }
+  return resolved;
+}
+
+/**
+ * Returns the operational Drive folder ID for this deployment.
+ * Reads the Script Property VDM_FOLDER_ID first; falls back to the
+ * legacy VDM_CONFIG.FOLDER_ID value for backward compatibility.
+ *
+ * @returns {string} The resolved Drive folder ID.
+ * @throws {Error} If neither source yields a non-empty ID.
+ */
+function getOperationalFolderId() {
+  const propertyValue = PropertiesService
+    .getScriptProperties()
+    .getProperty("VDM_FOLDER_ID");
+  return resolveOperationalFolderId(propertyValue, VDM_CONFIG.FOLDER_ID);
 }

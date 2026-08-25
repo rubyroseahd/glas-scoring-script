@@ -77,7 +77,7 @@ function deleteSpecificLegacyTabs(ss) {
 function runPreFlightSanityCheck() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
+    const folder = DriveApp.getFolderById(getOperationalFolderId());
     validateHeaders(folder);
     ui.alert("SUCCESS: All source file headers and directory structures validated.");
   } catch (e) {
