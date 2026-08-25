@@ -225,6 +225,13 @@ function runRegressionHarness() {
     folderIdMissingBothError !== null && folderIdMissingBothError.indexOf("VDM_FOLDER_ID") !== -1
   ));
 
+  // Case 22: Sync audit refresh messaging remains explicitly report-only
+  assertions.push(assertEqual(
+    "sync audit refresh message is report-only",
+    getSyncAuditRefreshSuccessMessage(),
+    "Shopify Sync Audit refreshed for review only. No Shopify/storefront prices were changed."
+  ));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");

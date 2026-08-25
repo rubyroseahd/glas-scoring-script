@@ -48,6 +48,8 @@ Minimum critical columns:
 
 ## [07] Storefront Update & Sync Audit (required)
 
+This tab is a review/export artifact generated from the dashboard matrix. It does not commit or publish any price changes to Shopify.
+
 Minimum critical columns:
 
 - `SKU Key`
@@ -88,6 +90,6 @@ After full sync:
 
 - [ ] `[02] Dashboard Matrix` exists and has rows for active Shopify SKUs
 - [ ] `[00] Action Items & Sign-off` is regenerated
-- [ ] `[07] Storefront Update & Sync Audit` is regenerated
+- [ ] `[07] Storefront Update & Sync Audit` is regenerated as a review/export artifact only
 - [ ] `[09] Master Pricing & Margin Ledger` is regenerated
 - [ ] `_backup_matrix_data` is refreshed
