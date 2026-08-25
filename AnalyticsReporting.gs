@@ -563,7 +563,7 @@ function workflowIngestInventoryOnly() {
   const ui = SpreadsheetApp.getUi();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
+    const folder = DriveApp.getFolderById(getOperationalFolderId());
     ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA, ss);
     ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB, ss);
     ui.alert("Inventory Snapshot Sync Complete.");
@@ -574,7 +574,7 @@ function workflowIngestMetadataOnly() {
   const ui = SpreadsheetApp.getUi();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const folder = DriveApp.getFolderById(VDM_CONFIG.FOLDER_ID);
+    const folder = DriveApp.getFolderById(getOperationalFolderId());
     ingestSalesCSV(folder, ss);
     ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST, "SKU", ss);
     executeCostResolutionWaterfall();

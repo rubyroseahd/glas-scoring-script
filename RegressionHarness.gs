@@ -201,6 +201,30 @@ function runRegressionHarness() {
   assertions.push(assertEqual("projected revenue impact includes baseline-present sku", existingBaselineImpact, 50));
   assertions.push(assertEqual("projected revenue impact excludes net-new sku", netNewImpact, 0));
 
+  // Case 18: Folder ID resolution — Script Property wins over legacy config
+  const resolvedFromProperty = resolveOperationalFolderId("prop-folder-id", "legacy-folder-id");
+  assertions.push(assertEqual("folder ID: property value wins over legacy", resolvedFromProperty, "prop-folder-id"));
+
+  // Case 19: Folder ID resolution — legacy config used when property is absent
+  const resolvedFromLegacy = resolveOperationalFolderId(null, "legacy-folder-id");
+  assertions.push(assertEqual("folder ID: legacy value used when property is absent", resolvedFromLegacy, "legacy-folder-id"));
+
+  // Case 20: Folder ID resolution — empty string property falls back to legacy
+  const resolvedFromEmptyProperty = resolveOperationalFolderId("", "legacy-folder-id");
+  assertions.push(assertEqual("folder ID: empty property falls back to legacy", resolvedFromEmptyProperty, "legacy-folder-id"));
+
+  // Case 21: Folder ID resolution — missing both sources throws an actionable error
+  let folderIdMissingBothError = null;
+  try {
+    resolveOperationalFolderId(null, "");
+  } catch (e) {
+    folderIdMissingBothError = e.message;
+  }
+  assertions.push(assertCondition(
+    "folder ID: missing both property and legacy throws an error",
+    folderIdMissingBothError !== null && folderIdMissingBothError.indexOf("VDM_FOLDER_ID") !== -1
+  ));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
