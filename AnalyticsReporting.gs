@@ -617,7 +617,7 @@ function workflowReportSyncOnly() {
     const idx = getHeaderMap(headers);
     const shopifyMap = getShopifyMap();
     generateSyncAudit(ss, rows, idx, shopifyMap);
-    ui.alert("Shopify Sync Audit Generated.");
+    ui.alert(getSyncAuditRefreshSuccessMessage());
   } catch (e) { ui.alert("Generation Failed: " + e.message); }
 }
 

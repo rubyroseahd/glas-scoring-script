@@ -154,7 +154,7 @@ Read the completion alert and record any reported counts for missing costs, nega
 
 ### Step 4 — Triage `[00] Action Items & Sign-off` queues
 
-Open `[00] Action Items & Sign-off` immediately after the run. Review blocked queues before any proposed storefront change is approved or committed. Use `[02] Dashboard Matrix` for full SKU calculations and `[07] Storefront Update & Sync Audit` to review proposed changes versus holds.
+Open `[00] Action Items & Sign-off` immediately after the run. Review blocked queues before any proposed storefront change is approved for external execution. Use `[02] Dashboard Matrix` for full SKU calculations and `[07] Storefront Update & Sync Audit` to review/export proposed changes versus holds; the sheet itself does not publish anything to Shopify.
 
 ---
 
@@ -251,4 +251,4 @@ Before approving pricing outputs for a monthly campaign, confirm:
 - [ ] Queue 1A and Queue 1B items were corrected or formally escalated.
 - [ ] Queue 2 and Queue 3 items received merchandising/channel review.
 - [ ] B2B holds were reviewed as intentional price-protection outcomes.
-- [ ] `[07] Storefront Update & Sync Audit` was reviewed before any storefront execution.
+- [ ] `[07] Storefront Update & Sync Audit` was reviewed as a report/export artifact before any separate storefront execution.

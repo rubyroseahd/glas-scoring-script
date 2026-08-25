@@ -149,7 +149,7 @@ When a gatekeeper condition is met, pricing action is held regardless of composi
 8. Review run output and triage:
    - `[00] Action Items & Sign-off` for queue routing
    - `[02] Dashboard Matrix` for score, guardrail, and tier fields
-   - `[07] Storefront Update & Sync Audit` for proposed storefront actions
+   - `[07] Storefront Update & Sync Audit` for review/export of proposed storefront changes; this sheet does not publish prices to Shopify
 9. If required, use **Advanced Diagnostics → Emergency Matrix Rollback** to restore `_backup_matrix_data`.
 
 ---

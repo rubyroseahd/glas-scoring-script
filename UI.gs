@@ -21,7 +21,7 @@ function onOpen() {
       .addItem('Run Pre-Flight Sanity Check', 'runPreFlightSanityCheck')
       .addItem('Freeze Pre-Campaign Baseline', 'freezePreCampaignBaseline')
       .addItem('Clear Baseline Snapshot', 'clearPreCampaignBaseline')
-      .addItem('Commit Shopify Sync Only (Bypass Matrix)', 'commitShopifySyncOnly')
+      .addItem('Refresh Shopify Sync Audit Only (Bypass Matrix)', 'refreshShopifySyncAuditOnly')
       .addItem('Emergency Matrix Rollback', 'rollbackToRecoveryPoint'))
     .addSeparator()
     .addItem('5. Reset Grid Architecture Logs', 'triggerNuclearArchitectureWipe')
@@ -85,14 +85,22 @@ function runPreFlightSanityCheck() {
   }
 }
 
-function commitShopifySyncOnly() {
+function getSyncAuditRefreshSuccessMessage() {
+  return "Shopify Sync Audit refreshed for review only. No Shopify/storefront prices were changed.";
+}
+
+/**
+ * Report-only diagnostic workflow: restores the dashboard state and regenerates
+ * the [07] sync audit without publishing any updates to Shopify/storefront pricing.
+ */
+function refreshShopifySyncAuditOnly() {
   const ui = SpreadsheetApp.getUi();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const state = recoverDashboardState();
     const shopifyMap = getShopifyMap();
     generateSyncAudit(ss, state.rows, getHeaderMap(state.headers), shopifyMap);
-    ui.alert("Storefront Sync Refreshed (Matrix Engine Bypassed).");
+    ui.alert(getSyncAuditRefreshSuccessMessage());
   } catch (e) {
     ui.alert("Sync Refresh Failed: " + e.message);
   }
