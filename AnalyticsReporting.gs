@@ -307,8 +307,10 @@ function generateActionItems(ss, rows, idx, shopifyMap) {
       const curMargin = safeNum(r[idx[dashboardHeaders.currentMargin]]) || 0;
       const stackMargin = safeNum(r[idx[dashboardHeaders.projectedMargin]]) || 0;
       let actionRequired = "";
-      if (queue.startsWith("Queue 1A")) {
-        actionRequired = "Flag for cost audit — base margin is negative";
+      if (queue.startsWith("Queue 1A") && r[idx["QUEUE CODE"]] === QUEUE_CODES.QUEUE_1A_COST) {
+        actionRequired = "Flag for cost audit — missing cost data";
+      } else if (queue.startsWith("Queue 1A")) {
+        actionRequired = "Flag for price/cost audit — base margin is negative";
       } else if (queue.startsWith("Queue 1B")) {
         actionRequired = "Pricing blocked — stacked margin below 20% guardrail";
       } else if (queue.startsWith("Queue 2")) {
@@ -385,7 +387,7 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
   const dashboardHeaders = getDashboardReportHeaders(idx);
 
   // Revised Schema Layer 3
-  const headers = ["SKU Key", "Handle", "Action", "Strategy Tier", "VDM Markdown %", "Old Price", "New Price", "Old MSRP", "New MSRP", "Base Price", "Guardrail"];
+  const headers = ["SKU Key", "Handle", "Action", "Strategy Tier", "VDM Markdown %", "Old Price", "New Price", "Old MSRP", "New MSRP", "Base Price", "Guardrail", "Gatekeeper Status"];
 
   const syncRows = rows.map(r => {
     const sku = r[idx["SKU ANCHOR KEY"]];
@@ -409,6 +411,7 @@ function generateSyncAudit(ss, rows, idx, shopifyMap) {
       currentMsrp,
       nextMsrp,
       currentMsrp,
+      r[idx["PROFIT GUARDRAIL STATUS ALERT"]],
       r[idx["GATEKEEPER STATUS"]]
     ];
   });

@@ -232,6 +232,41 @@ function runRegressionHarness() {
     "Shopify Sync Audit refreshed for review only. No Shopify/storefront prices were changed."
   ));
 
+  // Case 23: Margin score boundaries — 65%/50%/35% thresholds
+  assertions.push(assertEqual("margin score 3 at 0.65", scoreMarginComponent(0.65), 3));
+  assertions.push(assertEqual("margin score 2 at just below 0.65", scoreMarginComponent(0.6499), 2));
+  assertions.push(assertEqual("margin score 2 at 0.50", scoreMarginComponent(0.50), 2));
+  assertions.push(assertEqual("margin score 1 at just below 0.50", scoreMarginComponent(0.4999), 1));
+  assertions.push(assertEqual("margin score 1 at 0.35", scoreMarginComponent(0.35), 1));
+  assertions.push(assertEqual("margin score 0 at just below 0.35", scoreMarginComponent(0.3499), 0));
+
+  // Case 24: SHARED stock score uses totalStock (USA + WEB), not webStock alone
+  // usaStock = 200, webStock = 0, units90 = 60 → dailyVelocity = 60/90 ≈ 0.667
+  // dos with totalStock (200) = 200 / 0.667 ≈ 300 → score 0
+  // dos with webStock only (0) → dailyVelocity > 0 but 0/0.667 ≈ 0 → score 3
+  // totalStock-based score should be 0 (DoS > 180), proving USA reserve affects SHARED score
+  assertions.push(assertEqual(
+    "SHARED stock score uses totalStock — USA reserve stock raises DoS beyond 180",
+    scoreStockComponent("SHARED", 200, 0, 60),
+    0
+  ));
+  // usaStock = 0, webStock = 100, units90 = 60 → dos = 100/0.667 ≈ 150 → score 1
+  assertions.push(assertEqual(
+    "SHARED stock score uses totalStock — web-only stock maps to correct DoS tier",
+    scoreStockComponent("SHARED", 0, 100, 60),
+    1
+  ));
+  // totalStock = 200 + 100 = 300, units90 = 60 → dos ≈ 450 → score 0
+  assertions.push(assertEqual(
+    "SHARED stock score uses totalStock — combined USA + WEB inventory raises DoS",
+    scoreStockComponent("SHARED", 200, 100, 60),
+    0
+  ));
+
+  // Case 25: WEBONLY stock score is always 2 regardless of inventory levels
+  assertions.push(assertEqual("WEBONLY stock score is always 2 with zero inventory", scoreStockComponent("WEBONLY", 0, 0, 0), 2));
+  assertions.push(assertEqual("WEBONLY stock score is always 2 with large USA stock", scoreStockComponent("WEBONLY", 9999, 9999, 0), 2));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
