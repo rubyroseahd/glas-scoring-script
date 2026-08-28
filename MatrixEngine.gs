@@ -2,6 +2,32 @@
  * MODULE 3: MATRIX ENGINE
  */
 
+/**
+ * Pure helper: compute margin score (0–3) from a gross margin ratio.
+ * Thresholds: >= 0.65 → 3, >= 0.50 → 2, >= 0.35 → 1, < 0.35 → 0
+ */
+function scoreMarginComponent(curMargin) {
+  if (curMargin >= 0.65) return 3;
+  if (curMargin >= 0.50) return 2;
+  if (curMargin >= 0.35) return 1;
+  return 0;
+}
+
+/**
+ * Pure helper: compute stock score (0–3) from fulfillment tag and inventory.
+ * WEBONLY always returns 2. SHARED uses totalStock = usaStock + webStock for days-of-supply.
+ */
+function scoreStockComponent(fulfillment, usaStock, webStock, units90) {
+  if (fulfillment === "WEBONLY") return 2;
+  const totalStock = (usaStock || 0) + (webStock || 0);
+  const dailyVelocity = (units90 || 0) / 90;
+  const dos = dailyVelocity > 0 ? totalStock / dailyVelocity : 999;
+  if (dos <= 30) return 3;
+  if (dos <= 120) return 2;
+  if (dos <= 180) return 1;
+  return 0;
+}
+
 function isZeroCostPermitted(gatekeeperCode) {
   return gatekeeperCode === GATEKEEPER_CODES.GWP;
 }
@@ -158,23 +184,14 @@ function executeDashboardRefresh() {
       }
 
       // Margin Score (J)
-      let mScore = 0;
-      if (curMargin >= 0.55) mScore = 3;
-      else if (curMargin >= 0.45) mScore = 2;
-      else if (curMargin >= 0.35) mScore = 1;
+      const mScore = scoreMarginComponent(curMargin);
 
-      // Stock Score (K)
+      // Stock Score (K): resolve USA + WEB inventory before scoring
+      const usaRow = usaMap.get(sku);
+      const usaStock = usaRow && usaStockHeader ? safeNum(usaRow[uIdx[usaStockHeader]]) || 0 : 0;
       const webStock = safeNum(webMap.get(sku)) || 0; // Default null to 0 to prevent NaN in stock arithmetic
-      let sScore = 0;
-      if (fulfillment === "WEBONLY") {
-        sScore = 2;
-      } else {
-        const dailyVelocity = (units90 || 0) / 90;
-        const dos = dailyVelocity > 0 ? webStock / dailyVelocity : 999;
-        if (dos <= 30) sScore = 3;
-        else if (dos <= 120) sScore = 2;
-        else if (dos <= 180) sScore = 1;
-      }
+      const totalStock = usaStock + webStock;
+      const sScore = scoreStockComponent(fulfillment, usaStock, webStock, units90);
 
       const totalScore = vScore + mScore + sScore;
       
@@ -205,9 +222,6 @@ function executeDashboardRefresh() {
         // SHARED score 0–3: default Clearance/Archive (65%) already set above
       }
 
-      const usaRow = usaMap.get(sku);
-      const usaStock = usaRow ? safeNum(usaRow[uIdx[usaStockHeader]]) || 0 : 0;
-      const totalStock = (safeNum(usaStock) ?? 0) + (safeNum(webStock) ?? 0);
       const shopifyQty = shopifyQtyHeader ? safeNum(row[sIdx[shopifyQtyHeader]]) || 0 : 0;
       let propPrice = compareMSRP * (1 - vdmMarkdown);
       let simNet = propPrice * (1 - affiliateRate);

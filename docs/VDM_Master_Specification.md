@@ -66,9 +66,9 @@ Measures current gross margin based on live Shopify price vs. resolved procureme
 | Score | Condition |
 |---|---|
 | 0 | Margin < 35% |
-| 1 | Margin 35%–44.9% |
-| 2 | Margin 45%–54.9% |
-| 3 | Margin ≥ 55% |
+| 1 | Margin 35%–49.9% |
+| 2 | Margin 50%–64.9% |
+| 3 | Margin ≥ 65% |
 
 ### 3.3 Stock Score (0–3)
 
@@ -159,7 +159,7 @@ If a SHARED SKU has:
 
 Queue 1A missing-cost errors take precedence, followed by Queue 1A negative-margin audits, Queue 1B margin floor violations, B2B reserve holds, then Queue 2/3.
 
-- **Virtual Layer Override:** The engine contains a hardcoded intercept for web-exclusive items. Any SKU beginning with `GLAS-WEB` is automatically reclassified as `WEBONLY`, overriding any default `SHARED` tags imported from the Shopify CSV. This ensures virtual inventory is routed to digital review rather than physical clearance.
+- **Virtual Layer Override:** The engine reads cell `F2` of the `[01] Control Panel` tab as a comma-separated list of virtual SKU prefixes. Any SKU whose normalized key begins with one of those prefixes is automatically reclassified as `WEBONLY`, overriding any default `SHARED` tags imported from the Shopify CSV. This ensures virtual inventory is routed to digital review rather than physical clearance. Prefixes are configured dynamically; no prefixes are hardcoded.
 
 ---
 
@@ -205,8 +205,9 @@ Queue 1A missing-cost errors take precedence, followed by Queue 1A negative-marg
 | A | Active GWP SKUs |
 | B | New Launch Override SKUs |
 | C | MAP Restricted Brands (vendor-level strings) |
-| D | B2B Reserve Minimum Quantity |
+| D | B2B Reserve Min Qty |
 | E | Affiliate Coupon Rate (default: 15%) |
+| F / F2 | Virtual SKU Prefixes (comma-separated) |
 
 ---
 
