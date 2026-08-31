@@ -81,7 +81,7 @@ function ingestEEI(folder, fileName, tabName, ss) {
     const sku = safeStr(r[hMap[skuHeader]]).toUpperCase();
     if (!sku) return;
     const qty = safeNum(r[hMap[qtyHeader]]) || 0;
-    // Duplicate USA rows are consolidated into one SKU row, so this numeric metric is summed.
+    // Duplicate rows (from USA or WEB sources) are consolidated into one SKU row, so this numeric metric is summed.
     const sales = salesHeader ? safeNum(r[hMap[salesHeader]]) || 0 : 0;
     const existing = skuAggregateMap.get(sku);
     if (existing) {

@@ -14,7 +14,7 @@ function generateAllReports(dashboardState) {
     const message = safeStr(err && err.message) || safeStr(err) || "Unknown error";
     reportState.failedReports.push(reportName);
     failureDetails.push(`${reportName}: ${message}`);
-    logError("Reporting", new Error(`${reportName} failed: ${message}`));
+    logError("Reporting", err instanceof Error ? err : new Error(`${reportName} failed: ${message}`));
   };
 
   try {
