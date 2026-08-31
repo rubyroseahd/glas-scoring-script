@@ -374,6 +374,15 @@ function executeDashboardRefresh() {
     // BI Feed: raw flat table for Looker Studio ingestion
     const biSheet = getOrCreateSheet(VDM_CONFIG.TABS.BI_FEED, true);
     biSheet.clear();
+    biSheet.clearFormats();
+    biSheet.setFrozenRows(0);
+    biSheet.setFrozenColumns(0);
+    const biFilter = biSheet.getFilter();
+    if (biFilter) biFilter.remove();
+    const biMaxRows = biSheet.getMaxRows();
+    if (biMaxRows > 0) biSheet.showRows(1, biMaxRows);
+    const biMaxColumns = biSheet.getMaxColumns();
+    if (biMaxColumns > 0) biSheet.showColumns(1, biMaxColumns);
     biSheet.getRange(1, 1, 1, headerWidth).setValues([dashboardHeaders]);
     if (rowCount > 0) {
       biSheet.getRange(2, 1, rowCount, headerWidth).setValues(results);

@@ -3,26 +3,68 @@
  */
 
 function generateAllReports(dashboardState) {
+  const reportState = {
+    success: false,
+    failedReports: [],
+    errorDetails: "",
+    summaryTelemetry: null
+  };
+  const failureDetails = [];
+  const recordFailure = (reportName, err) => {
+    const message = safeStr(err && err.message) || safeStr(err) || "Unknown error";
+    reportState.failedReports.push(reportName);
+    failureDetails.push(`${reportName}: ${message}`);
+    logError("Reporting", err instanceof Error ? err : new Error(`${reportName} failed: ${message}`));
+  };
+
   try {
-    if (!dashboardState || !dashboardState.rows) throw new Error("Dashboard state missing for reporting.");
+    if (!dashboardState || !Array.isArray(dashboardState.rows) || !Array.isArray(dashboardState.headers)) {
+      recordFailure("Dashboard State", new Error("Dashboard state missing or invalid for reporting."));
+      reportState.errorDetails = failureDetails.join(" | ");
+      return reportState;
+    }
     const { rows, headers } = dashboardState;
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const shopifyMap = getShopifyMap();
-    if (shopifyMap.size === 0) throw new Error("Shopify metadata missing. Please run ingestion.");
+    if (shopifyMap.size === 0) {
+      recordFailure("Shopify Metadata", new Error("Shopify metadata missing. Please run ingestion."));
+      reportState.errorDetails = failureDetails.join(" | ");
+      return reportState;
+    }
 
     const idx = getHeaderMap(headers); // Use the standardized helper for Dashboard columns
 
-    const summaryTelemetry = generateSummaryTab(ss, rows, idx, shopifyMap);
-    generateActionItems(ss, rows, idx, shopifyMap);
-    generateSyncAudit(ss, rows, idx, shopifyMap);
-    generateMasterLedger(ss, rows, idx, shopifyMap);
-    generateSupplierScorecard(ss, rows, idx, shopifyMap);
-    logElasticitySnapshot(ss, rows, idx);
-    return { summaryTelemetry };
+    const reportRunners = [
+      {
+        name: "Executive Summary",
+        run: () => {
+          reportState.summaryTelemetry = generateSummaryTab(ss, rows, idx, shopifyMap);
+        }
+      },
+      { name: "Action Items", run: () => generateActionItems(ss, rows, idx, shopifyMap) },
+      { name: "Sync Audit", run: () => generateSyncAudit(ss, rows, idx, shopifyMap) },
+      { name: "Master Ledger", run: () => generateMasterLedger(ss, rows, idx, shopifyMap) },
+      { name: "Supplier Scorecard", run: () => generateSupplierScorecard(ss, rows, idx, shopifyMap) },
+      { name: "Elasticity Snapshot", run: () => logElasticitySnapshot(ss, rows, idx) }
+    ];
+
+    reportRunners.forEach(report => {
+      try {
+        report.run();
+      } catch (e) {
+        recordFailure(report.name, e);
+      }
+    });
+
+    reportState.success = reportState.failedReports.length === 0;
+    reportState.errorDetails = reportState.success ? "" : failureDetails.join(" | ");
+    return reportState;
   } catch (e) {
     logError("Reporting", e);
-    return { summaryTelemetry: null };
+    recordFailure("Reporting Pipeline", e);
+    reportState.errorDetails = failureDetails.join(" | ");
+    return reportState;
   }
 }
 
@@ -532,6 +574,12 @@ function executeFlexibleRefreshProcess() {
     runDataIngestion();
     const dashboardState = executeDashboardRefresh();
     const reportState = generateAllReports(dashboardState);
+    if (!reportState.success) {
+      const failedList = reportState.failedReports.length ? reportState.failedReports.join(", ") : "Unknown";
+      const details = reportState.errorDetails ? `\n\nDetails:\n${reportState.errorDetails}` : "";
+      ui.alert("Partial Failure", `One or more reports failed to generate.\nFailed Reports: ${failedList}${details}`, ui.ButtonSet.OK);
+      return;
+    }
     const summaryTelemetry = reportState && reportState.summaryTelemetry ? reportState.summaryTelemetry : {};
     const stats = dashboardState.stats || {};
     const clearanceRatio = safeNum(summaryTelemetry.clearanceRatio) || 0;
@@ -592,7 +640,13 @@ function workflowComputeOnly() {
   const ui = SpreadsheetApp.getUi();
   try {
     const dashboardState = executeDashboardRefresh();
-    generateAllReports(dashboardState);
+    const reportState = generateAllReports(dashboardState);
+    if (!reportState.success) {
+      const failedList = reportState.failedReports.length ? reportState.failedReports.join(", ") : "Unknown";
+      const details = reportState.errorDetails ? `\n\nDetails:\n${reportState.errorDetails}` : "";
+      ui.alert("Partial Failure", `Matrix recalculation completed, but one or more reports failed.\nFailed Reports: ${failedList}${details}`, ui.ButtonSet.OK);
+      return;
+    }
     ui.alert("Matrix Recalculation Complete.");
   } catch (e) { ui.alert("Calculation Failed: " + e.message); }
 }

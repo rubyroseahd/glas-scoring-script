@@ -76,15 +76,27 @@ function ingestEEI(folder, fileName, tabName, ss) {
   const stockHeader = tabName === VDM_CONFIG.TABS.RAW_EEI_USA
     ? "EEI USA WAREHOUSE ON HAND STOCK"
     : "EEI WEB WAREHOUSE ON HAND STOCK";
-  const rows = data.slice(5).map(r => {
+  const skuAggregateMap = new Map();
+  data.slice(5).forEach(r => {
     const sku = safeStr(r[hMap[skuHeader]]).toUpperCase();
-    return [
-      sku,
-      sku,
-      safeNum(r[hMap[qtyHeader]]) || 0,
-      salesHeader ? safeNum(r[hMap[salesHeader]]) || 0 : 0
-    ];
-  }).filter(r => r[0] !== "");
+    if (!sku) return;
+    const qty = safeNum(r[hMap[qtyHeader]]) || 0;
+    // Duplicate rows (from USA or WEB sources) are consolidated into one SKU row, so this numeric metric is summed.
+    const sales = salesHeader ? safeNum(r[hMap[salesHeader]]) || 0 : 0;
+    const existing = skuAggregateMap.get(sku);
+    if (existing) {
+      existing.qty += qty;
+      existing.sales += sales;
+      return;
+    }
+    skuAggregateMap.set(sku, { qty, sales });
+  });
+  const rows = Array.from(skuAggregateMap.entries()).map(([sku, aggregate]) => [
+    sku,
+    sku,
+    aggregate.qty,
+    aggregate.sales
+  ]);
   writeToWorkbookTab(tabName, [["SKU_ANCHOR", "ITEM CODE", stockHeader, "SALES PAST 30 DAYS"], ...rows], ss);
 }
 
@@ -99,9 +111,16 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU", "SKU"]) || safeStr(skuHeader).toUpperCase();
   const skuIdx = hMap[resolvedSkuHeader];
 
+  const costFirstWins = tabName === VDM_CONFIG.TABS.RAW_COST;
+  const seenCostSkus = new Set();
   const rows = data.slice(1).map(r => {
     const sku = safeStr(r[skuIdx]).toUpperCase();
     if (!sku) return null;
+    if (costFirstWins && seenCostSkus.has(sku)) {
+      Logger.log(`[WARN][Ingestion][Cost] Duplicate SKU "${sku}" encountered in ${fileName}; retaining first parsed record.`);
+      return null;
+    }
+    if (costFirstWins) seenCostSkus.add(sku);
     return [sku, ...r];
   }).filter(Boolean);
 
@@ -114,10 +133,14 @@ function ingestSalesCSV(folder, ss) {
   const skuHeader = getFirstAvailableHeader(hMap, ["PRODUCT VARIANT SKU", "VARIANT SKU", "SKU"]);
   const qtyHeader = getFirstAvailableHeader(hMap, ["NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"]);
 
-  const rows = data.slice(1).map(r => {
+  const skuAggregateMap = new Map();
+  data.slice(1).forEach(r => {
     const sku = safeStr(r[hMap[skuHeader]]).toUpperCase();
-    return [sku, sku, safeNum(r[hMap[qtyHeader]]) || 0];
-  }).filter(r => r[0] !== "");
+    if (!sku) return;
+    const qty = safeNum(r[hMap[qtyHeader]]) || 0;
+    skuAggregateMap.set(sku, (skuAggregateMap.get(sku) || 0) + qty);
+  });
+  const rows = Array.from(skuAggregateMap.entries()).map(([sku, qty]) => [sku, sku, qty]);
 
   writeToWorkbookTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows], ss);
 }
@@ -149,7 +172,12 @@ function executeCostResolutionWaterfall() {
   const costMap = new Map();
   costData.slice(1).forEach(r => {
     const sku = safeStr(cIdx.sku === undefined ? "" : r[cIdx.sku]).toUpperCase();
-    if (sku) costMap.set(sku, r);
+    if (!sku) return;
+    if (costMap.has(sku)) {
+      Logger.log(`[WARN][Cost Resolution] Duplicate cost SKU "${sku}" encountered; retaining first parsed record.`);
+      return;
+    }
+    costMap.set(sku, r);
   });
 
   const getNumericAt = (row, idx) => idx === undefined ? null : safeNum(row[idx]);
