@@ -26,14 +26,10 @@ function escapeRegExp(value) {
 function isMapVendorMatch(vendor, registeredVendors) {
   const normalizedVendor = safeStr(vendor).toUpperCase();
   if (!normalizedVendor) return false;
-
-  const normalizedRegisteredVendors = (registeredVendors || []).map(name => safeStr(name).toUpperCase()).filter(Boolean);
-  if (normalizedRegisteredVendors.indexOf(normalizedVendor) !== -1) return true;
-
-  return normalizedRegisteredVendors.some(name => {
-    if (name.length < 4) return false;
-    return new RegExp("(^|\\W)" + escapeRegExp(name) + "($|\\W)").test(normalizedVendor);
-  });
+  return (registeredVendors || [])
+    .map(name => safeStr(name).toUpperCase())
+    .filter(Boolean)
+    .indexOf(normalizedVendor) !== -1;
 }
 
 function getPercentileRankInc(sortedArr, value) {

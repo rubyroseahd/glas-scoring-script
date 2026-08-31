@@ -17,6 +17,14 @@ function runRegressionHarness() {
   assertions.push(assertCondition("equal values get equal percentile", getPercentileRankInc(tieData, 8) === getPercentileRankInc(tieData, 8)));
 
   // Case 2: Queue precedence (missing cost beats low-score routing)
+  assertions.push(assertCondition(
+    "MAP registry rejects partial vendor match",
+    !isMapVendorMatch("ACME TOYS", ["ACME"])
+  ));
+  assertions.push(assertCondition(
+    "MAP registry accepts exact normalized vendor match",
+    isMapVendorMatch("Acme Toys", ["ACME TOYS"])
+  ));
   const missingCostCase = evaluateRoutingRegressionCase({
     gateCode: GATEKEEPER_CODES.NONE,
     cost: 0,
@@ -114,11 +122,15 @@ function runRegressionHarness() {
 
   // Case 9: Shopify cost is final fallback when all procurement columns are null/empty
   const shopifyFallbackCost = resolveWaterfallCost(
-    ["SKU3", null, null, null, null, null],
+    ["SKU3", null, null, null, null, null, 999],
     { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5 },
     17
   );
-  assertions.push(assertEqual("cost waterfall falls back to shopify cost when all columns are null", shopifyFallbackCost, 17));
+  assertions.push(assertEqual(
+    "cost waterfall falls back to Shopify cost and ignores external Cost Per Item",
+    shopifyFallbackCost,
+    17
+  ));
 
   // Case 10: stripDuplicateSuffix removes ` (N)` before extension
   assertions.push(assertEqual("stripDuplicateSuffix removes (1)", stripDuplicateSuffix("shopify_export_gt (1).csv"), "shopify_export_gt.csv"));
