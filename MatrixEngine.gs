@@ -28,6 +28,35 @@ function scoreStockComponent(fulfillment, usaStock, webStock, units90) {
   return 0;
 }
 
+function parseVirtualSkuPrefixes(rawValue) {
+  const normalizedRawValue = safeStr(rawValue);
+  return normalizedRawValue
+    ? normalizedRawValue.split(",").map(p => p.trim().toUpperCase()).filter(p => p.length > 0)
+    : [];
+}
+
+function resolveFulfillmentType(sku, rawFulfillment, virtualSkuPrefixes) {
+  const fulfillment = safeStr(rawFulfillment).toUpperCase() || "SHARED";
+  const normalizedSku = safeStr(sku).toUpperCase();
+  if (virtualSkuPrefixes.length > 0 && virtualSkuPrefixes.some(prefix => normalizedSku.startsWith(prefix))) {
+    return "WEBONLY";
+  }
+  return fulfillment;
+}
+
+function resetBiFeedSheet(sheet) {
+  sheet.clear();
+  sheet.clearFormats();
+  sheet.setFrozenRows(0);
+  sheet.setFrozenColumns(0);
+  const biFilter = sheet.getFilter();
+  if (biFilter) biFilter.remove();
+  const biMaxRows = sheet.getMaxRows();
+  if (biMaxRows > 0) sheet.showRows(1, biMaxRows);
+  const biMaxColumns = sheet.getMaxColumns();
+  if (biMaxColumns > 0) sheet.showColumns(1, biMaxColumns);
+}
+
 function isZeroCostPermitted(gatekeeperCode) {
   return gatekeeperCode === GATEKEEPER_CODES.GWP;
 }
@@ -124,10 +153,8 @@ function executeDashboardRefresh() {
     // B2B Reserve Min Qty from Settings column D; defaults to 500 if missing or invalid
     const b2bReserveMin = (settingsData.length > 1 && safeNum(settingsData[1][3]) !== null && safeNum(settingsData[1][3]) > 0) ? safeNum(settingsData[1][3]) : 500;
     // Virtual SKU Prefixes from Settings column F (F2); parse comma-separated list
-    const virtualSkuPrefixesRaw = settingsData.length > 1 ? safeStr(settingsData[1][5]) : "";
-    const virtualSkuPrefixes = virtualSkuPrefixesRaw
-      ? virtualSkuPrefixesRaw.split(",").map(p => p.trim().toUpperCase()).filter(p => p.length > 0)
-      : [];
+    const virtualSkuPrefixesRaw = settingsData.length > 1 ? settingsData[1][5] : "";
+    const virtualSkuPrefixes = parseVirtualSkuPrefixes(virtualSkuPrefixesRaw);
 
     // Velocity Percentile Setup
     const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
@@ -157,10 +184,10 @@ function executeDashboardRefresh() {
       else if (launchSet.has(sku)) { gate = "New Launch"; gateCode = GATEKEEPER_CODES.NEW_LAUNCH; }
       else if (isMapVendorMatch(vendor, mapVendors)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
 
-      const rawFulfillment = fulfillmentHeader ? safeStr(row[sIdx[fulfillmentHeader]]) : "";
-      let fulfillment = rawFulfillment.toUpperCase() || "SHARED";
-      if (virtualSkuPrefixes.length > 0 && virtualSkuPrefixes.some(prefix => sku.startsWith(prefix))) { fulfillment = "WEBONLY"; }
-      else if (!fulfillmentHeader || !rawFulfillment) stats.fulfillmentFallbackCount++;
+      const rawFulfillment = fulfillmentHeader ? row[sIdx[fulfillmentHeader]] : "";
+      const normalizedFulfillment = safeStr(rawFulfillment).toUpperCase();
+      const fulfillment = resolveFulfillmentType(sku, rawFulfillment, virtualSkuPrefixes);
+      if (fulfillment !== "WEBONLY" && (!fulfillmentHeader || !normalizedFulfillment)) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx[shopifyPriceHeader]]);
       const rawCompare = shopifyCompareHeader ? safeNum(row[sIdx[shopifyCompareHeader]]) : null;
@@ -373,16 +400,7 @@ function executeDashboardRefresh() {
 
     // BI Feed: raw flat table for Looker Studio ingestion
     const biSheet = getOrCreateSheet(VDM_CONFIG.TABS.BI_FEED, true);
-    biSheet.clear();
-    biSheet.clearFormats();
-    biSheet.setFrozenRows(0);
-    biSheet.setFrozenColumns(0);
-    const biFilter = biSheet.getFilter();
-    if (biFilter) biFilter.remove();
-    const biMaxRows = biSheet.getMaxRows();
-    if (biMaxRows > 0) biSheet.showRows(1, biMaxRows);
-    const biMaxColumns = biSheet.getMaxColumns();
-    if (biMaxColumns > 0) biSheet.showColumns(1, biMaxColumns);
+    resetBiFeedSheet(biSheet);
     biSheet.getRange(1, 1, 1, headerWidth).setValues([dashboardHeaders]);
     if (rowCount > 0) {
       biSheet.getRange(2, 1, rowCount, headerWidth).setValues(results);
