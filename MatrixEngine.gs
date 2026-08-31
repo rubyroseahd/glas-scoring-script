@@ -32,6 +32,43 @@ function isZeroCostPermitted(gatekeeperCode) {
   return gatekeeperCode === GATEKEEPER_CODES.GWP;
 }
 
+/**
+ * Pure helper: parse a comma-separated virtual SKU prefix string into an array
+ * of trimmed, uppercase, non-empty prefix strings.
+ * e.g. " GLAS-WEB , peg-web, " => ['GLAS-WEB', 'PEG-WEB']
+ */
+function parseVirtualSkuPrefixes(raw) {
+  if (!raw) return [];
+  return raw.split(",").map(function(p) { return p.trim().toUpperCase(); }).filter(function(p) { return p.length > 0; });
+}
+
+/**
+ * Pure helper: resolve fulfillment type for a given SKU.
+ * If virtualPrefixes contains a prefix that matches the start of sku (uppercase),
+ * returns "WEBONLY". Otherwise returns rawFulfillment uppercased, falling back to "SHARED".
+ */
+function resolveFulfillment(sku, rawFulfillment, virtualPrefixes) {
+  const skuUpper = (sku || "").toUpperCase();
+  if (virtualPrefixes && virtualPrefixes.length > 0 &&
+      virtualPrefixes.some(function(prefix) { return skuUpper.startsWith(prefix); })) {
+    return "WEBONLY";
+  }
+  return (rawFulfillment || "").toUpperCase() || "SHARED";
+}
+
+/**
+ * Pure helper: reset a BI feed sheet to a clean headless/UI state.
+ * Clears formats, removes frozen rows/columns, and removes any active filter.
+ * Extracted so regression tests can verify the contract with a mock sheet.
+ */
+function resetBiSheet(biSheet) {
+  biSheet.clearFormats();
+  biSheet.setFrozenRows(0);
+  biSheet.setFrozenColumns(0);
+  var biFilter = biSheet.getFilter();
+  if (biFilter) biFilter.remove();
+}
+
 function executeDashboardRefresh() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -125,9 +162,7 @@ function executeDashboardRefresh() {
     const b2bReserveMin = (settingsData.length > 1 && safeNum(settingsData[1][3]) !== null && safeNum(settingsData[1][3]) > 0) ? safeNum(settingsData[1][3]) : 500;
     // Virtual SKU Prefixes from Settings column F (F2); parse comma-separated list
     const virtualSkuPrefixesRaw = settingsData.length > 1 ? safeStr(settingsData[1][5]) : "";
-    const virtualSkuPrefixes = virtualSkuPrefixesRaw
-      ? virtualSkuPrefixesRaw.split(",").map(p => p.trim().toUpperCase()).filter(p => p.length > 0)
-      : [];
+    const virtualSkuPrefixes = parseVirtualSkuPrefixes(virtualSkuPrefixesRaw);
 
     // Velocity Percentile Setup
     const salesArray = Array.from(salesMap.values()).filter(v => v !== null && v > 1).sort((a,b) => a-b);
@@ -158,9 +193,8 @@ function executeDashboardRefresh() {
       else if (isMapVendorMatch(vendor, mapVendors)) { gate = "3rd Party MAP"; gateCode = GATEKEEPER_CODES.MAP; }
 
       const rawFulfillment = fulfillmentHeader ? safeStr(row[sIdx[fulfillmentHeader]]) : "";
-      let fulfillment = rawFulfillment.toUpperCase() || "SHARED";
-      if (virtualSkuPrefixes.length > 0 && virtualSkuPrefixes.some(prefix => sku.startsWith(prefix))) { fulfillment = "WEBONLY"; }
-      else if (!fulfillmentHeader || !rawFulfillment) stats.fulfillmentFallbackCount++;
+      const fulfillment = resolveFulfillment(sku, rawFulfillment, virtualSkuPrefixes);
+      if (!virtualSkuPrefixes.some(function(p) { return sku.startsWith(p); }) && (!fulfillmentHeader || !rawFulfillment)) stats.fulfillmentFallbackCount++;
       const cost = safeNum(costMap.get(sku));
       const price = safeNum(row[sIdx[shopifyPriceHeader]]);
       const rawCompare = shopifyCompareHeader ? safeNum(row[sIdx[shopifyCompareHeader]]) : null;
@@ -374,11 +408,7 @@ function executeDashboardRefresh() {
     // BI Feed: raw flat table for Looker Studio ingestion
     const biSheet = getOrCreateSheet(VDM_CONFIG.TABS.BI_FEED, true);
     biSheet.clear();
-    biSheet.clearFormats();
-    biSheet.setFrozenRows(0);
-    biSheet.setFrozenColumns(0);
-    const biFilter = biSheet.getFilter();
-    if (biFilter) biFilter.remove();
+    resetBiSheet(biSheet);
     const biMaxRows = biSheet.getMaxRows();
     if (biMaxRows > 0) biSheet.showRows(1, biMaxRows);
     const biMaxColumns = biSheet.getMaxColumns();

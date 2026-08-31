@@ -267,6 +267,31 @@ function runRegressionHarness() {
   assertions.push(assertEqual("WEBONLY stock score is always 2 with zero inventory", scoreStockComponent("WEBONLY", 0, 0, 0), 2));
   assertions.push(assertEqual("WEBONLY stock score is always 2 with large USA stock", scoreStockComponent("WEBONLY", 9999, 9999, 0), 2));
 
+  // Case 26: Virtual SKU prefix — parsing, WEBONLY classification, SHARED fallback
+  const parsedPrefixes = parseVirtualSkuPrefixes(" GLAS-WEB , peg-web, ");
+  assertions.push(assertEqual("virtual prefix parse length", parsedPrefixes.length, 2));
+  assertions.push(assertEqual("virtual prefix first entry trimmed and uppercased", parsedPrefixes[0], "GLAS-WEB"));
+  assertions.push(assertEqual("virtual prefix second entry trimmed and uppercased", parsedPrefixes[1], "PEG-WEB"));
+  assertions.push(assertEqual("matching SKU glas-web-001 resolves to WEBONLY", resolveFulfillment("glas-web-001", "", parsedPrefixes), "WEBONLY"));
+  assertions.push(assertEqual("matching SKU PEG-WEB-002 resolves to WEBONLY", resolveFulfillment("PEG-WEB-002", "", parsedPrefixes), "WEBONLY"));
+  assertions.push(assertEqual("non-matching SKU defaults to SHARED", resolveFulfillment("OTHER-SKU-001", "", parsedPrefixes), "SHARED"));
+  assertions.push(assertEqual("non-matching SKU with raw fulfillment uses raw uppercased", resolveFulfillment("OTHER-SKU-001", "shared", parsedPrefixes), "SHARED"));
+
+  // Case 27: BI feed raw-table contract — sheet reset calls are made
+  var biCalls27 = { clearFormats: false, setFrozenRows: null, setFrozenColumns: null, filterRemoved: false };
+  var mockFilterObj = { remove: function() { biCalls27.filterRemoved = true; } };
+  var mockBiSheet27 = {
+    clearFormats: function() { biCalls27.clearFormats = true; },
+    setFrozenRows: function(n) { biCalls27.setFrozenRows = n; },
+    setFrozenColumns: function(n) { biCalls27.setFrozenColumns = n; },
+    getFilter: function() { return mockFilterObj; }
+  };
+  resetBiSheet(mockBiSheet27);
+  assertions.push(assertCondition("BI sheet clearFormats() was called", biCalls27.clearFormats === true));
+  assertions.push(assertEqual("BI sheet setFrozenRows(0) was called", biCalls27.setFrozenRows, 0));
+  assertions.push(assertEqual("BI sheet setFrozenColumns(0) was called", biCalls27.setFrozenColumns, 0));
+  assertions.push(assertCondition("BI sheet filter remove() was called", biCalls27.filterRemoved === true));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
