@@ -44,7 +44,7 @@ function ingestShopify(folder, ss) {
     const status = safeStr(row[hMap[statusHeader]]).toLowerCase();
     if (!sku || status !== "active") continue;
     if (seen.has(sku)) {
-      Logger.log("Warning: duplicate active SKU detected and skipped — retaining first parsed instance: " + sku);
+      Logger.log(`[WARN][Ingestion][Shopify] Duplicate active SKU "${sku}" encountered in ${VDM_CONFIG.SOURCE_FILES.SHOPIFY}; retaining first parsed record.`);
       continue;
     }
     seen.add(sku);
