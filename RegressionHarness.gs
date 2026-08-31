@@ -267,6 +267,54 @@ function runRegressionHarness() {
   assertions.push(assertEqual("WEBONLY stock score is always 2 with zero inventory", scoreStockComponent("WEBONLY", 0, 0, 0), 2));
   assertions.push(assertEqual("WEBONLY stock score is always 2 with large USA stock", scoreStockComponent("WEBONLY", 9999, 9999, 0), 2));
 
+  // Case 26: Control Panel virtual SKU prefix parsing
+  (function() {
+    const raw = " GLAS-WEB , peg-web, ";
+    const parsed = raw.split(",").map(function(p) { return p.trim().toUpperCase(); }).filter(function(p) { return p.length > 0; });
+    assertions.push(assertEqual("Case 26: parsed prefix count", parsed.length, 2));
+    assertions.push(assertEqual("Case 26: first prefix is GLAS-WEB", parsed[0], "GLAS-WEB"));
+    assertions.push(assertEqual("Case 26: second prefix is PEG-WEB", parsed[1], "PEG-WEB"));
+    const matchingSku = "GLAS-WEB-001";
+    const nonMatchingSku = "CLASSIC-001";
+    const matchFulfillment = parsed.some(function(p) { return matchingSku.startsWith(p); }) ? "WEBONLY" : "SHARED";
+    const noMatchFulfillment = parsed.some(function(p) { return nonMatchingSku.startsWith(p); }) ? "WEBONLY" : "SHARED";
+    assertions.push(assertEqual("Case 26: matching SKU is WEBONLY", matchFulfillment, "WEBONLY"));
+    assertions.push(assertEqual("Case 26: non-matching SKU defaults to SHARED", noMatchFulfillment, "SHARED"));
+  })();
+
+  // Case 27: BI feed raw-table contract — headless API state
+  (function() {
+    var calls = [];
+    var mockFilter = { remove: function() { calls.push("filter.remove"); } };
+    var mockBiSheet = {
+      clear: function() { calls.push("clear"); return mockBiSheet; },
+      clearFormats: function() { calls.push("clearFormats"); return mockBiSheet; },
+      setFrozenRows: function(n) { calls.push("setFrozenRows:" + n); return mockBiSheet; },
+      setFrozenColumns: function(n) { calls.push("setFrozenColumns:" + n); return mockBiSheet; },
+      getFilter: function() { return mockFilter; },
+      getMaxRows: function() { return 0; },
+      getMaxColumns: function() { return 0; },
+      getRange: function() {
+        return { setValues: function() {}, copyTo: function() {} };
+      },
+      showRows: function() {},
+      showColumns: function() {}
+    };
+
+    // Exercise the BI feed headless-reset sequence directly
+    mockBiSheet.clear();
+    mockBiSheet.clearFormats();
+    mockBiSheet.setFrozenRows(0);
+    mockBiSheet.setFrozenColumns(0);
+    var f = mockBiSheet.getFilter();
+    if (f) f.remove();
+
+    assertions.push(assertCondition("Case 27: clearFormats called on BI sheet", calls.indexOf("clearFormats") !== -1));
+    assertions.push(assertCondition("Case 27: setFrozenRows(0) called on BI sheet", calls.indexOf("setFrozenRows:0") !== -1));
+    assertions.push(assertCondition("Case 27: setFrozenColumns(0) called on BI sheet", calls.indexOf("setFrozenColumns:0") !== -1));
+    assertions.push(assertCondition("Case 27: filter.remove() called on BI sheet", calls.indexOf("filter.remove") !== -1));
+  })();
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");

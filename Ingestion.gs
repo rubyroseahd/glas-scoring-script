@@ -42,7 +42,11 @@ function ingestShopify(folder, ss) {
     const row = data[i];
     const sku = safeStr(row[hMap[skuHeader]]).toUpperCase();
     const status = safeStr(row[hMap[statusHeader]]).toLowerCase();
-    if (!sku || status !== "active" || seen.has(sku)) continue;
+    if (!sku || status !== "active") continue;
+    if (seen.has(sku)) {
+      Logger.log("Warning: duplicate active SKU detected and skipped — retaining first parsed instance: " + sku);
+      continue;
+    }
     seen.add(sku);
 
     const processed = [sku];
