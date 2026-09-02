@@ -132,6 +132,18 @@ function runRegressionHarness() {
   );
   assertions.push(assertEqual("cost waterfall ignores external cost per item and uses shopify fallback", ignoredExternalCostPerItem, 17));
 
+  // Case 9c: Cost header aliases accept the short EEI/COTR names used in docs/sample data
+  const shortAliasCostIndexes = getCostWaterfallIndexes(getHeaderMap([
+    "SKU",
+    "EEI LAST PURCHASE PRICE",
+    "GLAS COSTING",
+    "COTR LAST PURCHASE PRICE",
+    "COST",
+    "UNIT COST"
+  ]));
+  assertions.push(assertEqual("cost header alias resolves short eei name", shortAliasCostIndexes.eeiUpdate, 1));
+  assertions.push(assertEqual("cost header alias resolves short cotr name", shortAliasCostIndexes.cotrUpdate, 3));
+
   // Case 10: stripDuplicateSuffix removes ` (N)` before extension
   assertions.push(assertEqual("stripDuplicateSuffix removes (1)", stripDuplicateSuffix("shopify_export_gt (1).csv"), "shopify_export_gt.csv"));
   assertions.push(assertEqual("stripDuplicateSuffix removes (12)", stripDuplicateSuffix("EEI USA Whse Stock Report (12).csv"), "EEI USA Whse Stock Report.csv"));

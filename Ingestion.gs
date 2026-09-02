@@ -20,6 +20,38 @@ function runDataIngestion() {
   }
 }
 
+const COST_WATERFALL_HEADER_ALIASES = {
+  eeiUpdate: ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "EEI LAST PURCHASE PRICE"],
+  glas: ["GLAS COSTING"],
+  cotrUpdate: ["LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COTR LAST PURCHASE PRICE"],
+  cost: ["COST"],
+  unitCost: ["UNIT COST"]
+};
+
+function getCostWaterfallHeaders() {
+  return [].concat(
+    COST_WATERFALL_HEADER_ALIASES.eeiUpdate,
+    COST_WATERFALL_HEADER_ALIASES.glas,
+    COST_WATERFALL_HEADER_ALIASES.cotrUpdate,
+    COST_WATERFALL_HEADER_ALIASES.cost,
+    COST_WATERFALL_HEADER_ALIASES.unitCost
+  );
+}
+
+function getCostWaterfallIndexes(headerMap) {
+  const indexFor = candidates => {
+    const header = findFirstAvailableHeader(headerMap, candidates);
+    return header === null ? undefined : headerMap[header];
+  };
+  return {
+    eeiUpdate: indexFor(COST_WATERFALL_HEADER_ALIASES.eeiUpdate),
+    glas: indexFor(COST_WATERFALL_HEADER_ALIASES.glas),
+    cotrUpdate: indexFor(COST_WATERFALL_HEADER_ALIASES.cotrUpdate),
+    cost: indexFor(COST_WATERFALL_HEADER_ALIASES.cost),
+    unitCost: indexFor(COST_WATERFALL_HEADER_ALIASES.unitCost)
+  };
+}
+
 function validateHeaders(folder) {
   validateShopifyHeaders(folder);
   validateSalesHeaders(folder);
@@ -110,7 +142,7 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const hMap = getHeaderMap(headers);
   if (tabName === VDM_CONFIG.TABS.RAW_COST) {
     getFirstAvailableHeader(hMap, ["SKU", "VARIANT SKU"]);
-    getFirstAvailableHeader(hMap, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST"]);
+    getFirstAvailableHeader(hMap, getCostWaterfallHeaders());
   }
   const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU", "SKU"]) || safeStr(skuHeader).toUpperCase();
   const skuIdx = hMap[resolvedSkuHeader];
@@ -165,11 +197,7 @@ function executeCostResolutionWaterfall() {
 
   const cIdx = {
     sku: cIdxMap[costSkuHeader],
-    eeiUpdate: cIdxMap["LAST PURCHASE PRICE REPORT EEI(UPDATE)"],
-    glas: cIdxMap["GLAS COSTING"],
-    cotrUpdate: cIdxMap["LAST PURCHASE PRICE REPORT COTR(UPDATE)"],
-    cost: cIdxMap["COST"],
-    unitCost: cIdxMap["UNIT COST"]
+    ...getCostWaterfallIndexes(cIdxMap)
   };
 
   const costMap = new Map();
@@ -362,5 +390,5 @@ function validateCostHeaders(folder) {
   const data = loadCsvFile(folder, VDM_CONFIG.SOURCE_FILES.COST);
   const headers = getHeaderMap(data[0]);
   getFirstAvailableHeader(headers, ["SKU", "VARIANT SKU"]);
-  getFirstAvailableHeader(headers, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST"]);
+  getFirstAvailableHeader(headers, getCostWaterfallHeaders());
 }
