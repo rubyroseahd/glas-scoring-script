@@ -15,6 +15,7 @@ function onOpen() {
       SpreadsheetApp.getUi().createMenu("Advanced Diagnostics")
         .addItem("Run Pre-Flight Sanity Check", "workflowRunPreFlightSanityCheck")
         .addItem("Emergency Matrix Rollback", "workflowEmergencyMatrixRollback")
+        .addItem("Purge Deprecated / Legacy Tabs", "workflowPurgeLegacyTabs")
         .addItem("Freeze Pre-Campaign Baseline Snapshot", "workflowFreezeBaselineSnapshot")
     )
     .addToUi();
@@ -88,6 +89,15 @@ function workflowEmergencyMatrixRollback() {
     ui.alert("Emergency Matrix Rollback failed (UI.gs::workflowEmergencyMatrixRollback): " + e.message);
     return false;
   }
+}
+
+function workflowPurgeLegacyTabs() {
+  const ui = SpreadsheetApp.getUi();
+  const result = purgeLegacyTabs();
+  const purgedCount = result.count;
+  const purgedNames = result.names;
+  ui.alert("Cleanup Complete", "Purged " + purgedCount + " legacy tabs:\n" + purgedNames.join(", "), ui.ButtonSet.OK);
+  return result;
 }
 
 function readBackupMatrixState_() {

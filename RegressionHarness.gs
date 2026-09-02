@@ -403,6 +403,34 @@ function runRegressionHarness() {
     assertions.push(assertEqual("Case 28: staged warehouse includes other SKU stock", agg.stock.get("SKU-B"), 7));
   })();
 
+  // Case 29: Lean whitelist preserves production tabs and classifies deprecated tabs for purge
+  (function() {
+    const whitelistedTabs = getWhitelistedWorkbookTabNames_();
+    const deprecatedTabs = [
+      "[00] Executive Brief",
+      "[01] Supplier Scorecard & Capital Velocity",
+      "[04] Pricing Elasticity & Lift Analytics Ledger",
+      "legacy_run_log"
+    ];
+    const mockSheetNames = []
+      .concat(whitelistedTabs.slice(0, 2))
+      .concat([deprecatedTabs[0]])
+      .concat(whitelistedTabs.slice(2, 8))
+      .concat([deprecatedTabs[1]])
+      .concat(whitelistedTabs.slice(8))
+      .concat(deprecatedTabs.slice(2));
+    const legacyTabs = getLegacyTabNames_(mockSheetNames);
+
+    whitelistedTabs.forEach(tabName => {
+      assertions.push(assertCondition(`Case 29: whitelisted tab preserved (${tabName})`, legacyTabs.indexOf(tabName) === -1));
+    });
+    deprecatedTabs.forEach(tabName => {
+      assertions.push(assertCondition(`Case 29: deprecated tab classified (${tabName})`, legacyTabs.indexOf(tabName) !== -1));
+    });
+    assertions.push(assertEqual("Case 29: deprecated tab count", legacyTabs.length, deprecatedTabs.length));
+    assertions.push(assertEqual("Case 29: deprecated tab purge order", JSON.stringify(legacyTabs), JSON.stringify(deprecatedTabs)));
+  })();
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");

@@ -10,6 +10,7 @@
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function getOrCreateSheet(sheetName, isHidden = false) {
+  assertWhitelistedWorkbookTabName_(sheetName);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -17,6 +18,45 @@ function getOrCreateSheet(sheetName, isHidden = false) {
     if (isHidden) sheet.hideSheet();
   }
   return sheet;
+}
+
+function getWhitelistedWorkbookTabNames_() {
+  return Object.keys(VDM_CONFIG.TABS).map(key => VDM_CONFIG.TABS[key]);
+}
+
+function isWhitelistedWorkbookTabName_(sheetName) {
+  return getWhitelistedWorkbookTabNames_().indexOf(sheetName) !== -1;
+}
+
+function assertWhitelistedWorkbookTabName_(sheetName) {
+  if (!isWhitelistedWorkbookTabName_(sheetName)) {
+    throw new Error(`Unsupported workbook tab "${sheetName}". Update VDM_CONFIG.TABS before creating or writing this sheet.`);
+  }
+}
+
+function getLegacyTabNames_(sheetNames) {
+  return (sheetNames || []).filter(name => !isWhitelistedWorkbookTabName_(name));
+}
+
+function purgeLegacyTabs() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const purgedNames = [];
+  let remainingSheets = sheets.length;
+
+  sheets.forEach(sheet => {
+    if (remainingSheets <= 1) return;
+    const sheetName = sheet.getName();
+    if (isWhitelistedWorkbookTabName_(sheetName)) return;
+    ss.deleteSheet(sheet);
+    purgedNames.push(sheetName);
+    remainingSheets--;
+  });
+
+  return {
+    count: purgedNames.length,
+    names: purgedNames
+  };
 }
 
 function escapeRegExp(value) {
