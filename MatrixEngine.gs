@@ -558,16 +558,13 @@ function writeShopifyOutputFromRecords_(ss, records) {
   ];
 
   const rows = records.map(r => {
-    const compareOut = (r.gatekeeperCode === GATEKEEPER_CODES.OOS || r.markdownDepth === 0)
-      ? r.proposedPrice
-      : r.resolvedMsrp;
     return [
       r.handle,
       r.title,
       r.option1,
       r.sku,
       r.proposedPrice,
-      compareOut
+      r.proposedCompareAt
     ];
   });
 
