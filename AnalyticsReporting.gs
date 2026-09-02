@@ -41,3 +41,7 @@ function workflowRefreshTierSummaryOnly() {
     ui.alert("Tier Summary refresh failed: " + e.message);
   }
 }
+
+function getSyncAuditRefreshSuccessMessage() {
+  return "Shopify Sync Audit refreshed for review only. No Shopify/storefront prices were changed.";
+}

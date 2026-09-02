@@ -214,7 +214,7 @@ Queue 1A missing-cost errors take precedence, followed by Queue 1A negative-marg
 ## 10. Monthly SOP
 
 1. Upload source files to the configured Google Drive folder.
-2. Open the spreadsheet and click **EEI Pricing Engine Launcher → 1. Full System Sync (Standard)**.
+2. Open the spreadsheet and click **EEI Pricing Engine Launcher → 1. Run Full System Pricing & Sync**.
 3. Review the **[00] Action Items & Sign-off** tab for Queue 1A/1B/2/3 items.
 4. Approve or escalate flagged SKUs before pushing changes to Shopify.
 5. Use **Advanced Diagnostics → Run Pre-Flight Sanity Check** to validate source file headers before any sync.

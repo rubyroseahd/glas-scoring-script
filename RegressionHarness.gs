@@ -88,6 +88,22 @@ function runRegressionHarness() {
   assertions.push(assertEqual("b2b hold guardrail", b2bHoldCase.guardrailCode, GUARDRAIL_CODES.WARN_B2B_HOLD));
   assertions.push(assertEqual("b2b hold queue suppressed", b2bHoldCase.queueCode, QUEUE_CODES.NONE));
 
+  // Case 6b: B2B hold applies to score 4–5 markdown candidates (>=50%), not only score <=3
+  const b2bHoldAcceleratorCase = evaluateRoutingRegressionCase({
+    gateCode: GATEKEEPER_CODES.NONE,
+    cost: 30,
+    curMargin: 0.5,
+    simNet: 90,
+    fulfillment: "SHARED",
+    totalScore: 5,
+    usaStock: 700,
+    b2b30DSales: 8,
+    b2bReserveMin: 500,
+    units90: 30
+  });
+  assertions.push(assertEqual("b2b hold applies to score 5 accelerator candidate", b2bHoldAcceleratorCase.guardrailCode, GUARDRAIL_CODES.WARN_B2B_HOLD));
+  assertions.push(assertEqual("b2b hold suppresses queue 3 for score 5 candidate", b2bHoldAcceleratorCase.queueCode, QUEUE_CODES.NONE));
+
   // Case 7: Cost waterfall prioritizes audited update headers
   const prioritizedCost = resolveWaterfallCost(
     ["SKU1", 9, 8, 7, 6, 5],
@@ -302,8 +318,10 @@ function runRegressionHarness() {
     const nonMatchingSku = "CLASSIC-001";
     const matchFulfillment = resolveFulfillmentType(matchingSku, "shared", parsed);
     const noMatchFulfillment = resolveFulfillmentType(nonMatchingSku, "shared", parsed);
+    const ingestedWebOnlyFulfillment = resolveFulfillmentType(nonMatchingSku, "WEBONLY", parsed);
     assertions.push(assertEqual("Case 26: matching SKU is WEBONLY", matchFulfillment, "WEBONLY"));
     assertions.push(assertEqual("Case 26: non-matching SKU defaults to SHARED", noMatchFulfillment, "SHARED"));
+    assertions.push(assertEqual("Case 26: ingested WEBONLY is preserved without virtual prefix", ingestedWebOnlyFulfillment, "WEBONLY"));
   })();
 
   // Case 27: BI feed raw-table contract — headless API state
@@ -333,6 +351,28 @@ function runRegressionHarness() {
     assertions.push(assertCondition("Case 27: filter.remove() called on BI sheet", calls.indexOf("filter.remove") !== -1));
   })();
 
+  // Case 28: Warehouse aggregate reads normalized staging tabs (header row 1, data row 2+)
+  (function() {
+    const sheet = {
+      getDataRange: function() {
+        return {
+          getValues: function() {
+            return [
+              ["SKU_ANCHOR", "ITEM CODE", "EEI USA WAREHOUSE ON HAND STOCK", "SALES PAST 30 DAYS"],
+              ["SKU-A", "SKU-A", 10, 2],
+              ["SKU-A", "SKU-A", 5, 1],
+              ["SKU-B", "SKU-B", 7, 0]
+            ];
+          }
+        };
+      }
+    };
+    const agg = readWarehouseAggregate_(sheet, true);
+    assertions.push(assertEqual("Case 28: staged warehouse stock sums duplicate SKU rows", agg.stock.get("SKU-A"), 15));
+    assertions.push(assertEqual("Case 28: staged warehouse sales sums duplicate SKU rows", agg.sales30d.get("SKU-A"), 3));
+    assertions.push(assertEqual("Case 28: staged warehouse includes other SKU stock", agg.stock.get("SKU-B"), 7));
+  })();
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");
@@ -355,7 +395,7 @@ function evaluateRoutingRegressionCase(input) {
     guardrailCode = GUARDRAIL_CODES.ERR_NEGATIVE_MARGIN;
   } else if (mathGuard(input.simNet, input.cost)) {
     const stackMargin = input.simNet === 0 ? 0 : (input.simNet - input.cost) / input.simNet;
-    if (stackMargin < VDM_CONFIG.PROFIT_FLOOR_GUARDRAIL) {
+    if (stackMargin < getProfitFloorGuardrail_()) {
       guardrailCode = GUARDRAIL_CODES.ERR_MARGIN_FLOOR_VIOLATOR;
     }
   }
@@ -396,6 +436,19 @@ function deriveTargetTier(input) {
     return { tier: "Accelerator / Digital Review (50% Off)", vdmMarkdown: 0.5 };
   }
   return { tier: "Clearance/Archive (65% Off)", vdmMarkdown: 0.65 };
+}
+
+function isZeroCostPermitted(gateCode) {
+  return gateCode === GATEKEEPER_CODES.GWP;
+}
+
+function getProfitFloorGuardrail_() {
+  if (VDM_CONFIG && VDM_CONFIG.FLOORS && typeof VDM_CONFIG.FLOORS.STACKED_MARGIN_MIN === "number") {
+    return VDM_CONFIG.FLOORS.STACKED_MARGIN_MIN;
+  }
+  return VDM_CONFIG && typeof VDM_CONFIG.PROFIT_FLOOR_GUARDRAIL === "number"
+    ? VDM_CONFIG.PROFIT_FLOOR_GUARDRAIL
+    : 0.2;
 }
 
 function assertEqual(name, actual, expected) {

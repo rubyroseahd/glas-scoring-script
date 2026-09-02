@@ -5,6 +5,7 @@
 const VDM_CONFIG = {
   VERSION: "3.1-LEAN",
   FOLDER_ID: "",
+  PROFIT_FLOOR_GUARDRAIL: 0.20,
 
   SOURCE_FILES: {
     SHOPIFY: "shopify_export_gt.csv",
@@ -18,8 +19,10 @@ const VDM_CONFIG = {
     CONTROL: "[01] Control Panel",
     DASHBOARD: "[02] Dashboard Matrix",
     BI_FEED: "_BI_Data_Feed",
-    ACTION_HUB: "[00] Action Items & Reorder Hub",
+    ACTION_HUB: "[00] Action Items & Sign-off",
     TIER_SUMMARY: "[03] Tier Summary & Profitability Panel",
+    SYNC_AUDIT: "[07] Storefront Update & Sync Audit",
+    MASTER_LEDGER: "[09] Master Pricing & Margin Ledger",
     SHOPIFY_EXPORT: "shopify_export",
     EEI_USA: "eei_usa_whse",
     EEI_WEB: "eei_web_whse",
@@ -27,10 +30,12 @@ const VDM_CONFIG = {
     COST_LEDGER: "cost_ledger",
     RESOLVED_COST: "resolved_cost_ledger",
     SHOPIFY_OUTPUT: "shopify_export_output",
+    BACKUP_MATRIX_DATA: "_backup_matrix_data",
 
     // Backward-compatible aliases
     SETTINGS: "[01] Control Panel",
-    ACTION: "[00] Action Items & Reorder Hub",
+    ACTION: "[00] Action Items & Sign-off",
+    ACTION_REORDER_HUB: "[00] Action Items & Reorder Hub",
     SUMMARY: "[03] Tier Summary & Profitability Panel",
     RAW_SHOPIFY: "shopify_export",
     RAW_EEI_USA: "eei_usa_whse",
@@ -210,9 +215,8 @@ function loadControlPanelConfig(ss) {
       ? affiliateRateRaw
       : VDM_CONFIG.DEFAULTS.AFFILIATE_RATE,
     virtualSkuPrefixes: virtualPrefixesRaw
-      .split(",")
-      .map(p => safeStr(p).toUpperCase())
-      .filter(Boolean),
+      ? parseVirtualSkuPrefixes(virtualPrefixesRaw)
+      : [],
     defaultDomesticLeadTime: domesticLeadRaw !== null && domesticLeadRaw > 0
       ? Math.round(domesticLeadRaw)
       : VDM_CONFIG.DEFAULTS.DOMESTIC_LEAD_DAYS,

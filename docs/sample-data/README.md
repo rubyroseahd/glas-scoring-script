@@ -15,7 +15,7 @@ This folder provides minimal sanitized CSV fixtures for validating ingestion and
 1. Copy these files into the Google Drive folder configured by `VDM_CONFIG.FOLDER_ID` in `/home/runner/work/glas-scoring-script/glas-scoring-script/Config.gs`.
 2. Keep file names exactly as provided.
 3. Run **EEI Pricing Engine Launcher → Advanced Diagnostics → Run Pre-Flight Sanity Check**.
-4. Run **EEI Pricing Engine Launcher → 1. Full System Sync (Standard)**.
+4. Run **EEI Pricing Engine Launcher → 1. Run Full System Pricing & Sync**.
 
 ## Notes
 

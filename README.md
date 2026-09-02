@@ -40,12 +40,12 @@ Uses tie-aware percentile ranking (`PERCENTRANK.INC` style midpoint handling).
 Input: gross margin = `(Live Price − Resolved Cost) / Live Price`
 
 - **0** = margin < 35%
-- **1** = 35%–44.9%
-- **2** = 45%–54.9%
-- **3** = ≥ 55%
+- **1** = 35%–49.9%
+- **2** = 50%–64.9%
+- **3** = ≥ 65%
 
 ### 3) Stock Score (0–3)
-Input: web on-hand stock + sales velocity (for SHARED DoS)
+Input: total warehouse stock (`EEI USA + EEI WEB`) + sales velocity (for SHARED DoS)
 
 - **WEBONLY** → fixed **2**
 - **SHARED**:
@@ -56,7 +56,7 @@ Input: web on-hand stock + sales velocity (for SHARED DoS)
 
 DoS formula for SHARED:
 
-`DoS = Web Stock / (Units90 / 90)`
+`DoS = (EEI USA Stock + EEI WEB Stock) / (Units90 / 90)`
 
 If `Units90 = 0`, DoS is set to `999` (zero-sales override).
 
@@ -145,7 +145,7 @@ When a gatekeeper condition is met, pricing action is held regardless of composi
    - Column C: MAP Restricted Brands (vendor-level)
    - Column D: B2B Reserve Min Qty
    - `E2`: Affiliate coupon rate
-7. Run **EEI Pricing Engine Launcher → 1. Full System Sync (Standard)**.
+7. Run **EEI Pricing Engine Launcher → 1. Run Full System Pricing & Sync**.
 8. Review run output and triage:
    - `[00] Action Items & Sign-off` for queue routing
    - `[02] Dashboard Matrix` for score, guardrail, and tier fields
