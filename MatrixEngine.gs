@@ -602,6 +602,14 @@ function inflateRecordsFromDashboard_(dashboardState) {
     const markdown = safeNum(getValue(row, "VDM Markdown Depth %")) || 0;
     const resolvedMsrp = safeNum(getValue(row, "Live Compare MSRP")) || 0;
 
+    const units90 = safeNum(getValue(row, "Raw 90D Retail Velocity")) || 0;
+    const operationalStock = safeNum(getValue(row, "Operational Network Stock")) || 0;
+    const dailyVelocity = units90 > 0 ? units90 / 90 : 0;
+    const daysOfSupply = dailyVelocity > 0 ? operationalStock / dailyVelocity : (operationalStock > 0 ? 999 : 0);
+    const totalScore = safeNum(getValue(row, "Total Composite Score")) || 0;
+    const fulfillmentTag = safeStr(getValue(row, "Fulfillment Tag"));
+    const actionQueue = safeStr(getValue(row, "Action Queue"));
+
     return {
       sku,
       title: meta.title || "",
@@ -611,16 +619,16 @@ function inflateRecordsFromDashboard_(dashboardState) {
       resolvedCost: safeNum(getValue(row, "Resolved Cost Base")) || 0,
       livePrice: safeNum(getValue(row, "Live Storefront Price")) || 0,
       shopifyQty: safeNum(getValue(row, "Live Storefront Shopify Qty")) || 0,
-      operationalStock: safeNum(getValue(row, "Operational Network Stock")) || 0,
+      operationalStock,
       proposedPrice,
       proposedCompareAt: (markdown === 0 ? proposedPrice : resolvedMsrp),
       finalStackedMargin: safeNum(getValue(row, "Final Simulated Stacked Margin %")) || 0,
-      daysOfSupply: safeNum(getValue(row, "Operational Network Stock")) || 0,
-      reorderStatus: getValue(row, "Action Queue") && safeStr(getValue(row, "Action Queue")).indexOf("REORDER_ALERT") !== -1
+      daysOfSupply,
+      reorderStatus: actionQueue.indexOf("REORDER_ALERT") !== -1
         ? "REORDER_ALERT"
-        : "NO_REORDER_SIGNAL",
+        : (totalScore <= 3 && fulfillmentTag === "SHARED" ? "OK (Clearance)" : "NO_REORDER_SIGNAL"),
       suggestedReorderQty: 0,
-      actionQueue: safeStr(getValue(row, "Action Queue")),
+      actionQueue,
       targetTier: safeStr(getValue(row, "Target Strategic Tier")),
       gatekeeperCode: safeStr(getValue(row, "Gatekeeper Status")).indexOf("GK_OOS") !== -1 ? GATEKEEPER_CODES.OOS : GATEKEEPER_CODES.NONE,
       markdownDepth: markdown
