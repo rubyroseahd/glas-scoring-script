@@ -4,17 +4,103 @@
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu("⚡ VDM Engine")
-    .addItem("1. Run Full System Pricing & Sync", "executeDashboardRefresh")
+    .createMenu("EEI Pricing Engine Launcher")
+    .addItem("1. Run Full System Pricing & Sync", "workflowRunFullSystemPricingAndSync")
+    .addItem("1b. Refresh Dashboard Only (No Ingestion)", "executeDashboardRefresh")
     .addSeparator()
     .addItem("2. Refresh Action Items Hub Only", "workflowRefreshActionHubOnly")
     .addItem("3. Refresh Tier Summary Only", "workflowRefreshTierSummaryOnly")
     .addSeparator()
     .addSubMenu(
       SpreadsheetApp.getUi().createMenu("Advanced Diagnostics")
+        .addItem("Run Pre-Flight Sanity Check", "workflowRunPreFlightSanityCheck")
+        .addItem("Emergency Matrix Rollback", "workflowEmergencyMatrixRollback")
         .addItem("Freeze Pre-Campaign Baseline Snapshot", "workflowFreezeBaselineSnapshot")
     )
     .addToUi();
+}
+
+function workflowRunFullSystemPricingAndSync() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    runDataIngestion();
+  } catch (e) {
+    ui.alert(
+      "Full sync stopped during ingestion. Dashboard refresh was skipped.\n\n" +
+      "Fix source-file/header issues and rerun. Details: " + e.message
+    );
+    return { ok: false, stage: "ingestion", error: e.message };
+  }
+
+  try {
+    const refreshResult = executeDashboardRefresh();
+    ui.alert(
+      "Full system pricing + sync completed.\n\n" +
+      `Active SKUs processed: ${refreshResult.stats.totalActiveSkus}`
+    );
+    return { ok: true, stage: "refresh", result: refreshResult };
+  } catch (e) {
+    ui.alert(
+      "Ingestion completed, but pricing refresh failed.\n\n" +
+      "Review dashboard dependencies and rerun refresh. Details: " + e.message
+    );
+    throw e;
+  }
+}
+
+function workflowRunPreFlightSanityCheck() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const folder = DriveApp.getFolderById(getOperationalFolderId());
+    validateHeaders(folder);
+    ui.alert("Pre-Flight Sanity Check passed. Source CSV headers look valid.");
+    return true;
+  } catch (e) {
+    ui.alert("Pre-Flight Sanity Check failed: " + e.message);
+    return false;
+  }
+}
+
+function workflowEmergencyMatrixRollback() {
+  const ui = SpreadsheetApp.getUi();
+  const choice = ui.alert(
+    "Emergency Matrix Rollback",
+    "Restore [02] Dashboard Matrix and dependent outputs from _backup_matrix_data?\n\nThis will overwrite current run outputs.",
+    ui.ButtonSet.YES_NO
+  );
+  if (choice !== ui.Button.YES) {
+    ui.alert("Emergency Matrix Rollback cancelled.");
+    return false;
+  }
+
+  try {
+    const state = readBackupMatrixState_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    writeTableToSheet_(ss, VDM_CONFIG.TABS.DASHBOARD, state.headers, state.rows);
+    writeTableToSheet_(ss, VDM_CONFIG.TABS.BI_FEED, state.headers, state.rows);
+    writeActionHubFromDashboardState(state);
+    writeTierSummaryFromDashboardState(state);
+    writeSyncAuditFromDashboardState(state);
+    writeMasterLedgerFromDashboardState(state);
+    ui.alert("Emergency Matrix Rollback complete. Dashboard, queues, and audit outputs were restored.");
+    return true;
+  } catch (e) {
+    ui.alert("Emergency Matrix Rollback failed: " + e.message);
+    return false;
+  }
+}
+
+function readBackupMatrixState_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const backup = ss.getSheetByName(VDM_CONFIG.TABS.BACKUP_MATRIX_DATA);
+  if (!backup || backup.getLastRow() < 2) {
+    throw new Error("_backup_matrix_data is missing or empty.");
+  }
+  const values = backup.getDataRange().getValues();
+  return {
+    headers: values[0] || [],
+    rows: values.slice(1)
+  };
 }
 
 function workflowFreezeBaselineSnapshot() {

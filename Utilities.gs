@@ -61,3 +61,30 @@ function getStorefrontBracket(price, compareMsrp) {
   if (depth < 0.55) return VDM_CONFIG.BRACKET_NAMES.ACCELERATOR;
   return VDM_CONFIG.BRACKET_NAMES.CLEARANCE;
 }
+
+function parseVirtualSkuPrefixes(raw) {
+  return safeStr(raw)
+    .split(",")
+    .map(v => safeStr(v).toUpperCase())
+    .filter(Boolean);
+}
+
+function resolveFulfillmentType(sku, ingestedFulfillment, virtualSkuPrefixes) {
+  const normalizedSku = safeStr(sku).toUpperCase();
+  const normalizedIngested = safeStr(ingestedFulfillment).toUpperCase();
+  const prefixes = Array.isArray(virtualSkuPrefixes) ? virtualSkuPrefixes : [];
+  const hasVirtualPrefix = prefixes.some(prefix => normalizedSku.indexOf(safeStr(prefix).toUpperCase()) === 0);
+  if (hasVirtualPrefix) return "WEBONLY";
+  if (normalizedIngested === "WEBONLY") return "WEBONLY";
+  return "SHARED";
+}
+
+function resetBiFeedSheet(sheet) {
+  if (!sheet) return;
+  sheet.clear();
+  sheet.clearFormats();
+  const filter = sheet.getFilter ? sheet.getFilter() : null;
+  if (filter && filter.remove) filter.remove();
+  if (sheet.setFrozenRows) sheet.setFrozenRows(0);
+  if (sheet.setFrozenColumns) sheet.setFrozenColumns(0);
+}

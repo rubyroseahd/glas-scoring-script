@@ -139,7 +139,7 @@ MAP is evaluated at the vendor level. The source vendor string is compared again
 
 Open the workbook and select:
 
-**EEI Pricing Engine Launcher → 1. Full System Sync (Standard)**
+**EEI Pricing Engine Launcher → 1. Run Full System Pricing & Sync**
 
 The standard run performs the following sequence:
 

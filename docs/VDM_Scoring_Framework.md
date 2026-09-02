@@ -73,18 +73,18 @@ The VDM Engine uses a **10-point composite scoring model** combining three indep
 | Score | Bracket | Condition |
 |---|---|---|
 | **0** | Below Floor | Gross margin < 35% |
-| **1** | Acceptable | Gross margin 35%–44.9% |
-| **2** | Healthy | Gross margin 45%–54.9% |
-| **3** | Premium | Gross margin ≥ 55% |
+| **1** | Acceptable | Gross margin 35%–49.9% |
+| **2** | Healthy | Gross margin 50%–64.9% |
+| **3** | Premium | Gross margin ≥ 65% |
 
 ---
 
 ## Dimension 3: Retail Stock Score (0–3)
 
-**Input:** EEI Web Warehouse on-hand stock + 90-day sales velocity for DoS calculation.
+**Input:** Combined EEI USA + EEI Web warehouse on-hand stock + 90-day sales velocity for DoS calculation.
 
 **DoS Formula (SHARED only):**  
-`DoS = Web Stock / (Units90 / 90)`  
+`DoS = (EEI USA Stock + EEI Web Stock) / (Units90 / 90)`  
 If `Units90 = 0`, DoS is set to **999** (zero-sales override — no stock pressure signal).
 
 | Fulfillment | Score | Bracket | Condition |
