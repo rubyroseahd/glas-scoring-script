@@ -333,6 +333,14 @@ function runRegressionHarness() {
     assertions.push(assertCondition("Case 27: filter.remove() called on BI sheet", calls.indexOf("filter.remove") !== -1));
   })();
 
+  // Case 28: Obsolete Executive Brief tab is no longer part of the workbook registry
+  assertions.push(assertCondition("Case 28: BRIEF tab removed from VDM_CONFIG.TABS", !Object.prototype.hasOwnProperty.call(VDM_CONFIG.TABS, "BRIEF")));
+
+  // Case 29: Targeted reporting wrappers are exposed for the UI menu
+  assertions.push(assertCondition("Case 29: workflowReportActionItemsOnly is defined", typeof workflowReportActionItemsOnly === "function"));
+  assertions.push(assertCondition("Case 29: workflowReportScorecardOnly is defined", typeof workflowReportScorecardOnly === "function"));
+  assertions.push(assertCondition("Case 29: workflowReportElasticityOnly is defined", typeof workflowReportElasticityOnly === "function"));
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");

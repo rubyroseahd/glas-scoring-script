@@ -13,7 +13,10 @@ function onOpen() {
     .addSubMenu(ui.createMenu('3. Re-calculate & Simulate')
       .addItem('Recalculate Matrix (Memory Only)', 'workflowComputeOnly'))
     .addSubMenu(ui.createMenu('4. Generate Specific Reports')
+      .addItem('Generate Action Items [00] Only', 'workflowReportActionItemsOnly')
+      .addItem('Refresh Supplier Scorecard [01] Only', 'workflowReportScorecardOnly')
       .addItem('Update Executive Summary [03] Only', 'workflowReportSummaryOnly')
+      .addItem('Log Elasticity Snapshot [04] Only', 'workflowReportElasticityOnly')
       .addItem('Generate Sync Audit [07] Only', 'workflowReportSyncOnly')
       .addItem('Refresh Master Ledger [09] Only', 'workflowReportLedgerOnly'))
     .addSeparator()
@@ -64,7 +67,7 @@ function triggerNuclearArchitectureWipe() {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss The active spreadsheet.
  */
 function deleteSpecificLegacyTabs(ss) {
-  const legacyTabNames = ["[05] Warehouse Aging", "[06] MAP Compliance"];
+  const legacyTabNames = ["[00] Executive Brief", "[05] Warehouse Aging", "[06] MAP Compliance"];
   legacyTabNames.forEach(tabName => {
     const sheet = ss.getSheetByName(tabName);
     if (sheet) {
@@ -103,6 +106,48 @@ function refreshShopifySyncAuditOnly() {
     ui.alert(getSyncAuditRefreshSuccessMessage());
   } catch (e) {
     ui.alert("Sync Refresh Failed: " + e.message);
+  }
+}
+
+function workflowReportActionItemsOnly() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const { rows, headers } = recoverDashboardState();
+    const idx = getHeaderMap(headers);
+    const shopifyMap = getShopifyMap();
+    generateActionItems(ss, rows, idx, shopifyMap);
+    ui.alert("Action Items Report Generated.");
+  } catch (e) {
+    ui.alert("Action Items Generation Failed: " + e.message);
+  }
+}
+
+function workflowReportScorecardOnly() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const { rows, headers } = recoverDashboardState();
+    const idx = getHeaderMap(headers);
+    const shopifyMap = getShopifyMap();
+    generateSupplierScorecard(ss, rows, idx, shopifyMap);
+    ui.alert("Supplier Scorecard Refreshed.");
+  } catch (e) {
+    ui.alert("Supplier Scorecard Refresh Failed: " + e.message);
+  }
+}
+
+function workflowReportElasticityOnly() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const { rows, headers } = recoverDashboardState();
+    const idx = getHeaderMap(headers);
+    const shopifyMap = getShopifyMap();
+    logElasticitySnapshot(ss, rows, idx);
+    ui.alert("Elasticity Snapshot Logged.");
+  } catch (e) {
+    ui.alert("Elasticity Snapshot Failed: " + e.message);
   }
 }
 

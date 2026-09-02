@@ -21,7 +21,6 @@ const VDM_CONFIG = {
 
   TABS: {
     // User-Facing
-    BRIEF: "[00] Executive Brief", 
     ACTION: "[00] Action Items & Sign-off",
     SETTINGS: "[01] Control Panel",
     BASELINE: "[01b] Baseline Snapshot",
