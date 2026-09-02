@@ -731,8 +731,7 @@ function inflateRecordsFromDashboard_(dashboardState) {
     const resolvedMsrp = safeNum(getValue(row, "Live Compare MSRP")) || 0;
     const targetTier = safeStr(getValue(row, "Target Strategic Tier"));
     const gatekeeperCode = safeStr(getValue(row, "Gatekeeper Code")) || GATEKEEPER_CODES.NONE;
-    const preserveCompareAtOnZeroMarkdown = targetTier === "B2B Protection Hold" ||
-      (gatekeeperCode !== GATEKEEPER_CODES.NONE && gatekeeperCode !== GATEKEEPER_CODES.OOS);
+    const preserveCompareAtOnZeroMarkdown = gatekeeperCode !== GATEKEEPER_CODES.NONE || targetTier === "B2B Protection Hold";
 
     const units90 = safeNum(getValue(row, "Raw 90D Retail Velocity")) || 0;
     const operationalStock = safeNum(getValue(row, "Operational Network Stock")) || 0;
