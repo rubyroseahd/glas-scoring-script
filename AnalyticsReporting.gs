@@ -2,6 +2,11 @@
  * MODULE 4: LIGHTWEIGHT REPORTING WRAPPERS
  */
 
+function getProjectedRevenueImpact90Contribution(baselineSkuPresent, proposedPrice, baselinePrice, units90) {
+  if (!baselineSkuPresent || !mathGuard(proposedPrice, baselinePrice)) return 0;
+  return (proposedPrice - baselinePrice) * (safeNum(units90) || 0);
+}
+
 function recoverDashboardState() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dashboard = ss.getSheetByName(VDM_CONFIG.TABS.DASHBOARD);

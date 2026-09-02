@@ -685,7 +685,7 @@ function readResolvedCostMap_(sheet) {
   if (values.length < 2) return new Map();
   const idx = getHeaderMap(values[0]);
   const skuHeader = getFirstAvailableHeader(idx, ["SKU ANCHOR", "SKU_ANCHOR", "SKU", "VARIANT SKU"]);
-  const costHeader = findFirstAvailableHeader(idx, ["RESOLVED COST", "RESOLVED COST BASE", "UNIT COST"]) || Object.keys(idx).find(h => h !== skuHeader);
+  const costHeader = getFirstAvailableHeader(idx, ["RESOLVED COST", "RESOLVED COST BASE", "UNIT COST"]);
 
   const out = new Map();
   values.slice(1).forEach(row => {
@@ -702,12 +702,13 @@ function readLeadTimeMap_(sheet, control) {
   if (values.length < 2) return new Map();
   const idx = getHeaderMap(values[0]);
   const skuHeader = findFirstAvailableHeader(idx, ["SKU_ANCHOR", "SKU ANCHOR", "SKU", "VARIANT SKU"]);
+  const leadHeader = findFirstAvailableHeader(idx, ["LEAD TIME", "LEAD TIME (DAYS)", "LEAD DAYS", "LEADTIME", "SUPPLY LEAD TIME"]);
   const map = new Map();
 
   values.slice(1).forEach(row => {
     const sku = skuHeader ? safeStr(row[idx[skuHeader]]).toUpperCase() : "";
     if (!sku) return;
-    const rawLead = row.length > 6 ? row[6] : null;
+    const rawLead = leadHeader ? row[idx[leadHeader]] : (row.length > 6 ? row[6] : null);
     const numericLead = safeNum(rawLead);
     if (numericLead !== null && numericLead > 0) {
       map.set(sku, Math.round(numericLead));

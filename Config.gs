@@ -55,6 +55,14 @@ const VDM_CONFIG = {
     ENFORCE_OOS_REVERSION: true
   },
 
+  BRACKET_NAMES: {
+    HERO: "Full MSRP / Hero",
+    SIGNATURE: "Light Promo / Signature",
+    PROVEN: "Moderate Promo / Proven",
+    ACCELERATOR: "Deep Promo / Accelerator",
+    CLEARANCE: "Clearance / Archive"
+  },
+
   HOUSE_BRANDS: ["GLÄS", "GLAS", "GLASTOY"]
 };
 
