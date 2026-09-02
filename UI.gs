@@ -27,7 +27,7 @@ function workflowRunFullSystemPricingAndSync() {
   } catch (e) {
     ui.alert(
       "Full sync stopped during ingestion. Dashboard refresh was skipped.\n\n" +
-      "Fix source-file/header issues and rerun. Details: " + e.message
+      "Fix source-file/header issues and rerun. Details (UI.gs::workflowRunFullSystemPricingAndSync -> Ingestion.gs::runDataIngestion): " + e.message
     );
     return { ok: false, stage: "ingestion", error: e.message };
   }
@@ -42,7 +42,7 @@ function workflowRunFullSystemPricingAndSync() {
   } catch (e) {
     ui.alert(
       "Ingestion completed, but pricing refresh failed.\n\n" +
-      "Review dashboard dependencies and rerun refresh. Details: " + e.message
+      "Review dashboard dependencies and rerun refresh. Details (UI.gs::workflowRunFullSystemPricingAndSync -> MatrixEngine.gs::executeDashboardRefresh): " + e.message
     );
     throw e;
   }
@@ -56,7 +56,7 @@ function workflowRunPreFlightSanityCheck() {
     ui.alert("Pre-Flight Sanity Check passed. Source CSV headers look valid.");
     return true;
   } catch (e) {
-    ui.alert("Pre-Flight Sanity Check failed: " + e.message);
+    ui.alert("Pre-Flight Sanity Check failed (UI.gs::workflowRunPreFlightSanityCheck -> Ingestion.gs::validateHeaders): " + e.message);
     return false;
   }
 }
@@ -85,7 +85,7 @@ function workflowEmergencyMatrixRollback() {
     ui.alert("Emergency Matrix Rollback complete. Dashboard, queues, and audit outputs were restored.");
     return true;
   } catch (e) {
-    ui.alert("Emergency Matrix Rollback failed: " + e.message);
+    ui.alert("Emergency Matrix Rollback failed (UI.gs::workflowEmergencyMatrixRollback): " + e.message);
     return false;
   }
 }
@@ -138,6 +138,6 @@ function workflowFreezeBaselineSnapshot() {
     baseline.getRange(1, 1, payload.length, payload[0].length).setValues(payload);
     ui.alert("Baseline snapshot frozen.");
   } catch (e) {
-    ui.alert("Baseline snapshot failed: " + e.message);
+    ui.alert("Baseline snapshot failed (UI.gs::workflowFreezeBaselineSnapshot): " + e.message);
   }
 }

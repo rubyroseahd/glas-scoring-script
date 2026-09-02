@@ -81,10 +81,36 @@ function resolveFulfillmentType(sku, ingestedFulfillment, virtualSkuPrefixes) {
 
 function resetBiFeedSheet(sheet) {
   if (!sheet) return;
-  sheet.clear();
-  sheet.clearFormats();
-  const filter = sheet.getFilter ? sheet.getFilter() : null;
-  if (filter && filter.remove) filter.remove();
-  if (sheet.setFrozenRows) sheet.setFrozenRows(0);
-  if (sheet.setFrozenColumns) sheet.setFrozenColumns(0);
+  if (typeof sheet.clearContents === "function") sheet.clearContents();
+  resetSheetColumnGroups(sheet);
+}
+
+function safelyCollapseColumnGroup(sheet, columnIndex, depth) {
+  try {
+    if (sheet && typeof sheet.getColumnGroupDepth === "function" &&
+        typeof sheet.collapseColumnGroup === "function" &&
+        sheet.getColumnGroupDepth(columnIndex) >= depth) {
+      sheet.collapseColumnGroup(columnIndex, depth);
+    }
+  } catch (err) {
+    Logger.log(`[WARN] Skipping column group collapse at index ${columnIndex}: ${err.message}`);
+  }
+}
+
+function resetSheetColumnGroups(sheet) {
+  if (!sheet) return;
+  try {
+    if (typeof sheet.getMaxColumns !== "function" ||
+        typeof sheet.getColumnGroupDepth !== "function" ||
+        typeof sheet.removeColumnGroup !== "function") return;
+    const maxCols = sheet.getMaxColumns();
+    for (let col = maxCols; col >= 1; col--) {
+      const depth = sheet.getColumnGroupDepth(col);
+      for (let d = depth; d >= 1; d--) {
+        sheet.removeColumnGroup(col);
+      }
+    }
+  } catch (e) {
+    Logger.log(`[WARN] Column group reset bypassed: ${e.message}`);
+  }
 }
