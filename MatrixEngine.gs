@@ -656,11 +656,11 @@ function resolveTierCode_(targetTier, gatekeeperCode) {
 function resolveQueueCode_(queueTags, b2bHold) {
   if (b2bHold) return QUEUE_CODES.NONE;
   const tags = Array.isArray(queueTags) ? queueTags : [];
-  if (tags.some(tag => tag.indexOf("Queue 1A: Missing Cost Base") === 0)) return "Q1A_MISSING_COST";
-  if (tags.some(tag => tag.indexOf("Queue 1A: Negative Base Margin") === 0)) return "Q1A_NEGATIVE_MARGIN";
-  if (tags.some(tag => tag.indexOf("Queue 1B: Margin Floor Violator") === 0)) return "Q1B_MARGIN_FLOOR";
-  if (tags.some(tag => tag.indexOf("Queue 2") === 0)) return "Q2_WEBONLY_REVIEW";
-  if (tags.some(tag => tag.indexOf("Queue 3") === 0)) return "Q3_SHARED_CLEARANCE";
+  if (tags.some(tag => tag.indexOf("Queue 1A: Missing Cost Base") === 0)) return QUEUE_CODES.QUEUE_1A;
+  if (tags.some(tag => tag.indexOf("Queue 1A: Negative Base Margin") === 0)) return QUEUE_CODES.QUEUE_1A;
+  if (tags.some(tag => tag.indexOf("Queue 1B: Margin Floor Violator") === 0)) return QUEUE_CODES.QUEUE_1B;
+  if (tags.some(tag => tag.indexOf("Queue 2") === 0)) return QUEUE_CODES.QUEUE_2;
+  if (tags.some(tag => tag.indexOf("Queue 3") === 0)) return QUEUE_CODES.QUEUE_3;
   if (tags.some(tag => tag.indexOf("REORDER_ALERT") === 0)) return QUEUE_CODES.REORDER_ALERT;
   return QUEUE_CODES.NONE;
 }
@@ -729,6 +729,10 @@ function inflateRecordsFromDashboard_(dashboardState) {
     const proposedPrice = safeNum(getValue(row, "New Proposed Storefront Price")) || 0;
     const markdown = safeNum(getValue(row, "VDM Markdown Depth %")) || 0;
     const resolvedMsrp = safeNum(getValue(row, "Live Compare MSRP")) || 0;
+    const targetTier = safeStr(getValue(row, "Target Strategic Tier"));
+    const gatekeeperCode = safeStr(getValue(row, "Gatekeeper Code")) || GATEKEEPER_CODES.NONE;
+    const preserveCompareAtOnZeroMarkdown = targetTier === "B2B Protection Hold" ||
+      (gatekeeperCode !== GATEKEEPER_CODES.NONE && gatekeeperCode !== GATEKEEPER_CODES.OOS);
 
     const units90 = safeNum(getValue(row, "Raw 90D Retail Velocity")) || 0;
     const operationalStock = safeNum(getValue(row, "Operational Network Stock")) || 0;
@@ -749,7 +753,7 @@ function inflateRecordsFromDashboard_(dashboardState) {
       shopifyQty: safeNum(getValue(row, "Live Storefront Shopify Qty")) || 0,
       operationalStock,
       proposedPrice,
-      proposedCompareAt: (markdown === 0 ? proposedPrice : resolvedMsrp),
+      proposedCompareAt: (markdown === 0 && !preserveCompareAtOnZeroMarkdown ? proposedPrice : resolvedMsrp),
       finalStackedMargin: safeNum(getValue(row, "Final Simulated Stacked Margin %")) || 0,
       daysOfSupply,
       reorderStatus: actionQueue.indexOf("REORDER_ALERT") !== -1
@@ -757,8 +761,8 @@ function inflateRecordsFromDashboard_(dashboardState) {
         : (totalScore <= 3 && fulfillmentTag === "SHARED" ? "OK (Clearance)" : "NO_REORDER_SIGNAL"),
       suggestedReorderQty: 0,
       actionQueue,
-      targetTier: safeStr(getValue(row, "Target Strategic Tier")),
-      gatekeeperCode: safeStr(getValue(row, "Gatekeeper Code")) || GATEKEEPER_CODES.NONE,
+      targetTier,
+      gatekeeperCode,
       markdownDepth: markdown,
       pricingMigrationStatus: safeStr(getValue(row, "Pricing Migration Status")) || "✓ Price Hold",
       priceShift: safeNum(getValue(row, "Retail Price Shift ($)")) || 0,
