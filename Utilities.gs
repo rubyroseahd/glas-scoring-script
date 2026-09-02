@@ -7,16 +7,74 @@
  * Fetches a sheet by name or creates it with default styling if it doesn't exist.
  * @param {string} sheetName 
  * @param {boolean} isHidden
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
  * @return {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function getOrCreateSheet(sheetName, isHidden = false) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getOrCreateSheet(sheetName, isHidden = false, ss = SpreadsheetApp.getActiveSpreadsheet()) {
+  assertWhitelistedWorkbookTabName_(sheetName);
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
+    sheet = ss.insertSheet(normalizeWorkbookTabName_(sheetName));
     if (isHidden) sheet.hideSheet();
   }
   return sheet;
+}
+
+function normalizeWorkbookTabName_(sheetName) {
+  return safeStr(sheetName);
+}
+
+function getWhitelistedWorkbookTabNames_() {
+  return Array.from(new Set(Object.keys(VDM_CONFIG.TABS).map(key => normalizeWorkbookTabName_(VDM_CONFIG.TABS[key]))));
+}
+
+function getWhitelistedWorkbookTabNameSet_() {
+  return new Set(getWhitelistedWorkbookTabNames_());
+}
+
+function isWhitelistedWorkbookTabName_(sheetName) {
+  return getWhitelistedWorkbookTabNameSet_().has(normalizeWorkbookTabName_(sheetName));
+}
+
+function assertWhitelistedWorkbookTabName_(sheetName) {
+  if (!isWhitelistedWorkbookTabName_(sheetName)) {
+    throw new Error(`Unsupported workbook tab "${sheetName}". Update VDM_CONFIG.TABS before creating or writing this sheet.`);
+  }
+}
+
+function getLegacyTabNames_(sheetNames) {
+  return (sheetNames || []).filter(name => !isWhitelistedWorkbookTabName_(name));
+}
+
+function isSheetHidden_(sheet) {
+  return !!(sheet && typeof sheet.isSheetHidden === "function" && sheet.isSheetHidden());
+}
+
+function countVisibleSheets_(sheets) {
+  return (sheets || []).filter(sheet => !isSheetHidden_(sheet)).length;
+}
+
+function purgeLegacyTabs(ss = SpreadsheetApp.getActiveSpreadsheet()) {
+  const sheets = ss.getSheets();
+  const purgedNames = [];
+  let remainingSheets = sheets.length;
+  let visibleSheetsRemaining = countVisibleSheets_(sheets);
+
+  sheets.forEach(sheet => {
+    if (remainingSheets <= 1) return;
+    const sheetName = sheet.getName();
+    if (isWhitelistedWorkbookTabName_(sheetName)) return;
+    if (!isSheetHidden_(sheet) && visibleSheetsRemaining <= 1) return;
+    ss.deleteSheet(sheet);
+    purgedNames.push(sheetName);
+    remainingSheets--;
+    if (!isSheetHidden_(sheet)) visibleSheetsRemaining--;
+  });
+
+  return {
+    count: purgedNames.length,
+    names: purgedNames
+  };
 }
 
 function escapeRegExp(value) {

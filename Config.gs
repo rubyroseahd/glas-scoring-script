@@ -18,11 +18,12 @@ const VDM_CONFIG = {
   TABS: {
     CONTROL: "[01] Control Panel",
     DASHBOARD: "[02] Dashboard Matrix",
-    BI_FEED: "_BI_Data_Feed",
     ACTION_HUB: "[00] Action Items & Sign-off",
     TIER_SUMMARY: "[03] Tier Summary & Profitability Panel",
     SYNC_AUDIT: "[07] Storefront Update & Sync Audit",
     MASTER_LEDGER: "[09] Master Pricing & Margin Ledger",
+    BI_FEED: "_BI_Data_Feed",
+    BACKUP_MATRIX_DATA: "_backup_matrix_data",
     SHOPIFY_EXPORT: "shopify_export",
     EEI_USA: "eei_usa_whse",
     EEI_WEB: "eei_web_whse",
@@ -30,20 +31,6 @@ const VDM_CONFIG = {
     COST_LEDGER: "cost_ledger",
     RESOLVED_COST: "resolved_cost_ledger",
     SHOPIFY_OUTPUT: "shopify_export_output",
-    BACKUP_MATRIX_DATA: "_backup_matrix_data",
-
-    // Backward-compatible aliases
-    SETTINGS: "[01] Control Panel",
-    ACTION: "[00] Action Items & Sign-off",
-    ACTION_REORDER_HUB: "[00] Action Items & Reorder Hub",
-    SUMMARY: "[03] Tier Summary & Profitability Panel",
-    RAW_SHOPIFY: "shopify_export",
-    RAW_EEI_USA: "eei_usa_whse",
-    RAW_EEI_WEB: "eei_web_whse",
-    RAW_SALES: "shopify_90day_sales",
-    RAW_COST: "cost_ledger",
-    MASTER_COST: "resolved_cost_ledger",
-    SHOPIFY_EXPORT_OUTPUT: "shopify_export_output",
     BASELINE: "[01b] Baseline Snapshot"
   },
 

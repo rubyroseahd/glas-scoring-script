@@ -403,6 +403,143 @@ function runRegressionHarness() {
     assertions.push(assertEqual("Case 28: staged warehouse includes other SKU stock", agg.stock.get("SKU-B"), 7));
   })();
 
+  // Case 29: Lean whitelist preserves production tabs and classifies deprecated tabs for purge
+  (function() {
+    const whitelistedTabs = getWhitelistedWorkbookTabNames_();
+    const deprecatedTabs = [
+      "[00] Executive Brief",
+      "[01] Supplier Scorecard & Capital Velocity",
+      "[04] Pricing Elasticity & Lift Analytics Ledger",
+      "legacy_run_log"
+    ];
+    const mockSheetNames = []
+      .concat(whitelistedTabs.slice(0, 2))
+      .concat([deprecatedTabs[0]])
+      .concat(whitelistedTabs.slice(2, 8))
+      .concat([deprecatedTabs[1]])
+      .concat(whitelistedTabs.slice(8))
+      .concat(deprecatedTabs.slice(2));
+    const legacyTabs = getLegacyTabNames_(mockSheetNames);
+
+    whitelistedTabs.forEach(tabName => {
+      assertions.push(assertCondition(`Case 29: whitelisted tab preserved (${tabName})`, legacyTabs.indexOf(tabName) === -1));
+    });
+    deprecatedTabs.forEach(tabName => {
+      assertions.push(assertCondition(`Case 29: deprecated tab classified (${tabName})`, legacyTabs.indexOf(tabName) !== -1));
+    });
+    assertions.push(assertEqual("Case 29: deprecated tab count", legacyTabs.length, deprecatedTabs.length));
+    assertions.push(assertEqual("Case 29: deprecated tab purge order", JSON.stringify(legacyTabs), JSON.stringify(deprecatedTabs)));
+  })();
+
+  // Case 29b: Whitelist matching trims sheet names and de-duplicates config values
+  (function() {
+    const whitelistedTabs = getWhitelistedWorkbookTabNames_();
+    const whitelistSet = getWhitelistedWorkbookTabNameSet_();
+    assertions.push(assertEqual("Case 29b: whitelist and set sizes match", whitelistSet.size, whitelistedTabs.length));
+    assertions.push(assertCondition("Case 29b: trailing whitespace still matches whitelist", isWhitelistedWorkbookTabName_(" [01] Control Panel ")));
+    assertions.push(assertCondition("Case 29b: legacy detector preserves trimmed active tab", getLegacyTabNames_([" [01] Control Panel "]).length === 0));
+  })();
+
+  // Case 29c: Purge retains one visible sheet and one total sheet
+  (function() {
+    function makeMockSheet(name, hidden) {
+      return {
+        _name: name,
+        _hidden: !!hidden,
+        getName: function() { return this._name; },
+        isSheetHidden: function() { return this._hidden; }
+      };
+    }
+
+    let deletedNames = [];
+    const allLegacySheets = [
+      makeMockSheet("legacy visible 1", false),
+      makeMockSheet("legacy hidden", true),
+      makeMockSheet("legacy visible 2", false)
+    ];
+    const allLegacySs = {
+      getSheets: function() { return allLegacySheets; },
+      deleteSheet: function(sheet) { deletedNames.push(sheet.getName()); }
+    };
+    const allLegacyResult = purgeLegacyTabs(allLegacySs);
+    assertions.push(assertEqual("Case 29c: purge deletes only two all-legacy sheets", allLegacyResult.count, 2));
+    assertions.push(assertEqual("Case 29c: purge leaves one all-legacy sheet behind", JSON.stringify(allLegacyResult.names), JSON.stringify(["legacy visible 1", "legacy hidden"])));
+
+    deletedNames = [];
+    const visibleGuardSheets = [
+      makeMockSheet("[01] Control Panel", true),
+      makeMockSheet("_BI_Data_Feed", true),
+      makeMockSheet("legacy visible", false),
+      makeMockSheet("legacy hidden", true)
+    ];
+    const visibleGuardSs = {
+      getSheets: function() { return visibleGuardSheets; },
+      deleteSheet: function(sheet) { deletedNames.push(sheet.getName()); }
+    };
+    const visibleGuardResult = purgeLegacyTabs(visibleGuardSs);
+    assertions.push(assertEqual("Case 29c: hidden legacy sheet still purges", JSON.stringify(visibleGuardResult.names), JSON.stringify(["legacy hidden"])));
+    assertions.push(assertCondition("Case 29c: last visible sheet is retained", deletedNames.indexOf("legacy visible") === -1));
+  })();
+
+  // Case 29d: UI purge workflow confirms destructive deletes and handles no-op path
+  (function() {
+    function makeUi(buttonResponse, alerts) {
+      return {
+        Button: { YES: "YES" },
+        ButtonSet: { OK: "OK", YES_NO: "YES_NO" },
+        alert: function(title, message, buttons) {
+          alerts.push([title, message, buttons]);
+          return buttonResponse;
+        }
+      };
+    }
+
+    const originalGetUi = SpreadsheetApp.getUi;
+    const originalGetActiveSpreadsheet = SpreadsheetApp.getActiveSpreadsheet;
+    const originalPurgeLegacyTabs = purgeLegacyTabs;
+
+    try {
+      const noOpAlerts = [];
+      SpreadsheetApp.getUi = function() { return makeUi("OK", noOpAlerts); };
+      SpreadsheetApp.getActiveSpreadsheet = function() {
+        return {
+          getSheets: function() {
+            return [{ getName: function() { return "[01] Control Panel"; } }];
+          }
+        };
+      };
+      const noOpResult = workflowPurgeLegacyTabs();
+      assertions.push(assertEqual("Case 29d: no-op purge returns zero count", noOpResult.count, 0));
+      assertions.push(assertEqual("Case 29d: no-op purge shows no-legacy alert", noOpAlerts[0][0], "No Legacy Tabs"));
+
+      const confirmAlerts = [];
+      SpreadsheetApp.getUi = function() { return makeUi("YES", confirmAlerts); };
+      SpreadsheetApp.getActiveSpreadsheet = function() {
+        return {
+          getSheets: function() {
+            return [
+              { getName: function() { return "[01] Control Panel"; } },
+              { getName: function() { return "legacy_a"; } },
+              { getName: function() { return "legacy_b"; } }
+            ];
+          }
+        };
+      };
+      purgeLegacyTabs = function() {
+        return { count: 2, names: ["legacy_a", "legacy_b"] };
+      };
+      const confirmResult = workflowPurgeLegacyTabs();
+      assertions.push(assertEqual("Case 29d: confirmed purge returns deleted count", confirmResult.count, 2));
+      assertions.push(assertEqual("Case 29d: confirm alert title", confirmAlerts[0][0], "Confirm Tab Purge"));
+      assertions.push(assertCondition("Case 29d: confirm alert lists candidates", confirmAlerts[0][1].indexOf("legacy_a") !== -1 && confirmAlerts[0][1].indexOf("legacy_b") !== -1));
+      assertions.push(assertEqual("Case 29d: cleanup alert title", confirmAlerts[1][0], "Cleanup Complete"));
+    } finally {
+      SpreadsheetApp.getUi = originalGetUi;
+      SpreadsheetApp.getActiveSpreadsheet = originalGetActiveSpreadsheet;
+      purgeLegacyTabs = originalPurgeLegacyTabs;
+    }
+  })();
+
   const failures = assertions.filter(a => !a.pass);
   if (failures.length > 0) {
     const detail = failures.map(f => "- " + f.name + " (expected: " + f.expected + ", actual: " + f.actual + ")").join("\n");

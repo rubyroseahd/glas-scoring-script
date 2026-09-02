@@ -15,6 +15,7 @@ function onOpen() {
       SpreadsheetApp.getUi().createMenu("Advanced Diagnostics")
         .addItem("Run Pre-Flight Sanity Check", "workflowRunPreFlightSanityCheck")
         .addItem("Emergency Matrix Rollback", "workflowEmergencyMatrixRollback")
+        .addItem("Purge Deprecated / Legacy Tabs", "workflowPurgeLegacyTabs")
         .addItem("Freeze Pre-Campaign Baseline Snapshot", "workflowFreezeBaselineSnapshot")
     )
     .addToUi();
@@ -88,6 +89,29 @@ function workflowEmergencyMatrixRollback() {
     ui.alert("Emergency Matrix Rollback failed (UI.gs::workflowEmergencyMatrixRollback): " + e.message);
     return false;
   }
+}
+
+function workflowPurgeLegacyTabs() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const purgedNames = getLegacyTabNames_(ss.getSheets().map(sheet => sheet.getName()));
+  if (purgedNames.length === 0) {
+    ui.alert("No Legacy Tabs", "All tabs conform to the active VDM schema.", ui.ButtonSet.OK);
+    return { count: 0, names: [] };
+  }
+  const response = ui.alert(
+    "Confirm Tab Purge",
+    "The following " + purgedNames.length + " tab(s) will be permanently deleted:\n\n" +
+      purgedNames.join("\n") +
+      "\n\nDo you want to proceed?",
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return { count: 0, names: [] };
+  const result = purgeLegacyTabs();
+  const purgedCount = result.count;
+  const deletedNames = result.names;
+  ui.alert("Cleanup Complete", "Purged " + purgedCount + " legacy tabs:\n" + deletedNames.join(", "), ui.ButtonSet.OK);
+  return result;
 }
 
 function readBackupMatrixState_() {

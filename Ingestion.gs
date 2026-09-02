@@ -9,10 +9,10 @@ function runDataIngestion() {
 
     validateHeaders(folder);
     ingestShopify(folder, ss);
-    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.RAW_EEI_USA, ss);
-    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.RAW_EEI_WEB, ss);
+    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_USA, VDM_CONFIG.TABS.EEI_USA, ss);
+    ingestEEI(folder, VDM_CONFIG.SOURCE_FILES.EEI_WEB, VDM_CONFIG.TABS.EEI_WEB, ss);
     ingestSalesCSV(folder, ss);
-    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.RAW_COST, "SKU", ss);
+    ingestGenericCSV(folder, VDM_CONFIG.SOURCE_FILES.COST, VDM_CONFIG.TABS.COST_LEDGER, "SKU", ss);
     executeCostResolutionWaterfall();
   } catch (e) {
     logError("Ingestion", e);
@@ -92,7 +92,7 @@ function ingestShopify(folder, ss) {
     rows.push(processed);
   }
 
-  writeToWorkbookTab(VDM_CONFIG.TABS.RAW_SHOPIFY, [["SKU_ANCHOR", ...headers, "FULFILLMENT TYPE"], ...rows], ss);
+  writeToWorkbookTab(VDM_CONFIG.TABS.SHOPIFY_EXPORT, [["SKU_ANCHOR", ...headers, "FULFILLMENT TYPE"], ...rows], ss);
 }
 
 function ingestEEI(folder, fileName, tabName, ss) {
@@ -104,12 +104,12 @@ function ingestEEI(folder, fileName, tabName, ss) {
   const skuHeader = getFirstAvailableHeader(hMap, ["ITEM CODE", "SKU"]);
   const qtyHeader = getFirstAvailableHeader(
     hMap,
-    tabName === VDM_CONFIG.TABS.RAW_EEI_USA
+    tabName === VDM_CONFIG.TABS.EEI_USA
       ? ["EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]
       : ["EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "ON HAND STOCK"]
   );
   const salesHeader = findFirstAvailableHeader(hMap, ["SALES PAST 30 DAYS"]);
-  const stockHeader = tabName === VDM_CONFIG.TABS.RAW_EEI_USA
+  const stockHeader = tabName === VDM_CONFIG.TABS.EEI_USA
     ? "EEI USA WAREHOUSE ON HAND STOCK"
     : "EEI WEB WAREHOUSE ON HAND STOCK";
   const skuAggregateMap = new Map();
@@ -140,14 +140,14 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const data = loadCsvFile(folder, fileName);
   const headers = data[0].map(h => safeStr(h));
   const hMap = getHeaderMap(headers);
-  if (tabName === VDM_CONFIG.TABS.RAW_COST) {
+  if (tabName === VDM_CONFIG.TABS.COST_LEDGER) {
     getFirstAvailableHeader(hMap, ["SKU", "VARIANT SKU"]);
     getFirstAvailableHeader(hMap, getCostWaterfallHeaders());
   }
   const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU", "SKU"]) || safeStr(skuHeader).toUpperCase();
   const skuIdx = hMap[resolvedSkuHeader];
 
-  const costFirstWins = tabName === VDM_CONFIG.TABS.RAW_COST;
+  const costFirstWins = tabName === VDM_CONFIG.TABS.COST_LEDGER;
   const seenCostSkus = new Set();
   const rows = data.slice(1).map(r => {
     const sku = safeStr(r[skuIdx]).toUpperCase();
@@ -178,13 +178,13 @@ function ingestSalesCSV(folder, ss) {
   });
   const rows = Array.from(skuAggregateMap.entries()).map(([sku, qty]) => [sku, sku, qty]);
 
-  writeToWorkbookTab(VDM_CONFIG.TABS.RAW_SALES, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows], ss);
+  writeToWorkbookTab(VDM_CONFIG.TABS.SALES_90D, [["SKU_ANCHOR", "Product variant SKU", "Net items sold"], ...rows], ss);
 }
 
 function executeCostResolutionWaterfall() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shopifySheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_SHOPIFY);
-  const costSheet = ss.getSheetByName(VDM_CONFIG.TABS.RAW_COST);
+  const shopifySheet = ss.getSheetByName(VDM_CONFIG.TABS.SHOPIFY_EXPORT);
+  const costSheet = ss.getSheetByName(VDM_CONFIG.TABS.COST_LEDGER);
   if (!shopifySheet || !costSheet) throw new Error("Required ingestion tabs are missing for cost resolution.");
 
   const shopifyData = shopifySheet.getDataRange().getValues();
@@ -223,7 +223,7 @@ function executeCostResolutionWaterfall() {
     resolved.push([sku, final]);
   });
 
-  writeToWorkbookTab(VDM_CONFIG.TABS.MASTER_COST, resolved, ss);
+  writeToWorkbookTab(VDM_CONFIG.TABS.RESOLVED_COST, resolved, ss);
 }
 
 function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
@@ -247,8 +247,9 @@ function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
 }
 
 function writeToWorkbookTab(name, data, ss) {
+  assertWhitelistedWorkbookTabName_(name);
   let sheet = ss.getSheetByName(name);
-  if (!sheet) sheet = ss.insertSheet(name);
+  if (!sheet) sheet = getOrCreateSheet(name, name.indexOf("_") === 0, ss);
   sheet.clearContents();
   if (data.length > 0 && data[0] && data[0].length > 0) {
     sheet.getRange(1, 1, data.length, data[0].length).setValues(data);

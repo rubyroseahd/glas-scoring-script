@@ -18,8 +18,8 @@ The VDM Pricing Engine is a Google Apps Script–based operational pricing syste
 | `Ingestion.gs` | Pre-flight header validation; CSV loading; Shopify, EEI warehouse, 90-day sales, and cost ingestion; normalized staging-tab writes; and the cost-resolution waterfall. |
 | `MatrixEngine.gs` | SKU-level scoring, gatekeeper overrides, tier selection, price simulation, margin and B2B guardrails, action-queue assignment, dashboard write, and recovery-point backup. |
 | `Utilities.gs` | Shared sheet helpers, safe string/number conversion, MAP-vendor matching, and tie-aware percentile math. |
-| `UI.gs` | The `EEI Pricing Engine Launcher` spreadsheet menu, targeted workflows, pre-flight action, sync-only action, rollback, and architecture reset. |
-| `AnalyticsReporting.gs` | Creation of the executive summary, action-items/sign-off queue, sync audit, master ledger, supplier scorecard, elasticity ledger, and reporting workflow actions. |
+| `UI.gs` | The `EEI Pricing Engine Launcher` spreadsheet menu, targeted workflows, pre-flight action, cleanup workflow, sync-only action, and rollback. |
+| `AnalyticsReporting.gs` | Lightweight wrappers for dashboard-state recovery and targeted refresh workflows for the action hub and tier summary. |
 
 ### Documentation suite
 
@@ -31,9 +31,9 @@ The VDM Pricing Engine is a Google Apps Script–based operational pricing syste
 
 ### Primary workbook tabs
 
-The system uses the following user-facing tabs: `[00] Executive Brief`, `[00] Action Items & Sign-off`, `[01] Control Panel`, `[01] Supplier Scorecard & Capital Velocity`, `[02] Dashboard Matrix`, `[03] Tier Summary & Distribution Panel`, `[04] Pricing Elasticity & Lift Analytics Ledger`, `[07] Storefront Update & Sync Audit`, and `[09] Master Pricing & Margin Ledger`.
+The system uses the following user-facing tabs: `[00] Action Items & Sign-off`, `[01] Control Panel`, `[01b] Baseline Snapshot`, `[02] Dashboard Matrix`, `[03] Tier Summary & Profitability Panel`, `[07] Storefront Update & Sync Audit`, and `[09] Master Pricing & Margin Ledger`.
 
-The ingestion/staging layer uses `shopify_export`, `shopify_90day_sales`, `eei_usa_whse`, `eei_web_whse`, and `cost_ledger`. The hidden `_backup_matrix_data` tab is the recovery point used by the emergency rollback workflow.
+The ingestion/staging layer uses `shopify_export`, `shopify_90day_sales`, `eei_usa_whse`, `eei_web_whse`, `cost_ledger`, `resolved_cost_ledger`, and `shopify_export_output`. The hidden `_BI_Data_Feed` and `_backup_matrix_data` tabs support dashboard refresh and emergency rollback workflows.
 
 ---
 
