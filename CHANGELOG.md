@@ -2,6 +2,14 @@
 
 All notable changes to scoring thresholds, guardrails, queue routing, and operational contracts should be documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Removed pipeline-side UI formatting from ingestion/reset write paths (`clearFormats`, filter removal, frozen-pane resets, and ingestion-side number formatting) so template-owned presentation remains intact.
+- Kept BI-feed resets content-only and added guarded column-group diagnostics cleanup via `resetSheetColumnGroups(sheet)` without allowing missing/malformed group APIs to fail execution.
+- Added guarded helper `safelyCollapseColumnGroup(sheet, columnIndex, depth)` for operator diagnostics (not used by pricing/ingestion flow).
+
 ## [3.0.0-PROD] - 2026-08-06
 
 ### Added

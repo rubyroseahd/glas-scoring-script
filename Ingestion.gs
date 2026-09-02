@@ -249,10 +249,9 @@ function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
 function writeToWorkbookTab(name, data, ss) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) sheet = ss.insertSheet(name);
-  sheet.clear().clearFormats();
+  sheet.clearContents();
   if (data.length > 0 && data[0] && data[0].length > 0) {
     sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
-    sheet.getRange(1, 1, data.length, 1).setNumberFormat("@");
   }
 }
 
