@@ -1,16 +1,11 @@
 /**
- * MODULE 1: GLOBAL ENVIRONMENT & SYSTEM VARIABLES MATRIX
- * System Version: 3.0.0-PROD
+ * MODULE 1: GLOBAL CONFIGURATION
  */
 
 const VDM_CONFIG = {
-  VERSION: "3.0.0-PROD",
-  AFFILIATE_RATE_DEFAULT: 0.15,
-  PROFIT_FLOOR_GUARDRAIL: 0.20,
-  CLEARANCE_CAP_WARN: 0.20,
-  HERO_POOL_MIN_WARN: 0.15,
+  VERSION: "3.1-LEAN",
   FOLDER_ID: "",
-  
+
   SOURCE_FILES: {
     SHOPIFY: "shopify_export_gt.csv",
     EEI_USA: "EEI USA Whse Stock Report.csv",
@@ -20,43 +15,46 @@ const VDM_CONFIG = {
   },
 
   TABS: {
-    // User-Facing
-    BRIEF: "[00] Executive Brief", 
-    ACTION: "[00] Action Items & Sign-off",
+    CONTROL: "[01] Control Panel",
+    DASHBOARD: "[02] Dashboard Matrix",
+    BI_FEED: "_BI_Data_Feed",
+    ACTION_HUB: "[00] Action Items & Reorder Hub",
+    TIER_SUMMARY: "[03] Tier Summary & Profitability Panel",
+    SHOPIFY_EXPORT: "shopify_export",
+    EEI_USA: "eei_usa_whse",
+    EEI_WEB: "eei_web_whse",
+    SALES_90D: "shopify_90day_sales",
+    COST_LEDGER: "cost_ledger",
+    RESOLVED_COST: "resolved_cost_ledger",
+    SHOPIFY_OUTPUT: "shopify_export_output",
+
+    // Backward-compatible aliases
     SETTINGS: "[01] Control Panel",
-    BASELINE: "[01b] Baseline Snapshot",
-    DASHBOARD: "[02] Dashboard Matrix", 
-    SUMMARY: "[03] Tier Summary & Distribution Panel", 
-    SCORECARD: "[01] Supplier Scorecard & Capital Velocity", 
-    ELASTICITY: "[04] Pricing Elasticity & Lift Analytics Ledger", 
-    SYNC_AUDIT: "[07] Storefront Update & Sync Audit",
-    MASTER_LEDGER: "[09] Master Pricing & Margin Ledger",
-    
-    // Workbook ingestion tabs
+    ACTION: "[00] Action Items & Reorder Hub",
+    SUMMARY: "[03] Tier Summary & Profitability Panel",
     RAW_SHOPIFY: "shopify_export",
     RAW_EEI_USA: "eei_usa_whse",
     RAW_EEI_WEB: "eei_web_whse",
     RAW_SALES: "shopify_90day_sales",
     RAW_COST: "cost_ledger",
     MASTER_COST: "resolved_cost_ledger",
-    BACKUP: "_backup_matrix_data",
-    BI_FEED: "_BI_Data_Feed"
+    SHOPIFY_EXPORT_OUTPUT: "shopify_export_output",
+    BASELINE: "[01b] Baseline Snapshot"
   },
 
-  DESIGN: {
-    HEADER_BG: "#000000",
-    HEADER_TEXT: "#FFFFFF",
-    ALERT_BREACH_BG: "#FCE8E6",
-    ALERT_BREACH_TEXT: "#A51D24",
-    ALERT_GWP_BG: "#E8F0FE",
-    ALERT_GWP_TEXT: "#1A73E8",
-    ALERT_LAUNCH_BG: "#E6F4EA",
-    ALERT_LAUNCH_TEXT: "#137333",
-    PANEL_GLOBAL_BG: "#444444",
-    PANEL_PROPRIETARY_BG: "#1C3A27"
+  FLOORS: {
+    STACKED_MARGIN_MIN: 0.20,
+    DRIFT_ALERT_RATIO: 0.20
   },
 
-  HOUSE_BRANDS: ["Gläs", "glastoy", "GLASTOY"],
+  DEFAULTS: {
+    B2B_RESERVE_MIN_QTY: 500,
+    AFFILIATE_RATE: 0.15,
+    DOMESTIC_LEAD_DAYS: 30,
+    IMPORT_LEAD_DAYS: 90,
+    ENFORCE_OOS_REVERSION: true
+  },
+
   BRACKET_NAMES: {
     HERO: "Full MSRP / Hero",
     SIGNATURE: "Light Promo / Signature",
@@ -65,114 +63,85 @@ const VDM_CONFIG = {
     CLEARANCE: "Clearance / Archive"
   },
 
-  // Header String Registry for dynamic matching
-  HEADERS: {
-    SHOPIFY: ["VARIANT SKU", "HANDLE", "STATUS", "VARIANT PRICE", "VARIANT COMPARE AT PRICE", "VENDOR", "TYPE", "PRODUCT TYPE", "COST PER ITEM"],
-    USA_WAREHOUSE: ["ITEM CODE", "SKU", "EEI USA WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "SALES PAST 30 DAYS"],
-    WEB_WAREHOUSE: ["ITEM CODE", "SKU", "EEI WEB WAREHOUSE ON HAND STOCK", "QTY", "QUANTITY", "SALES PAST 30 DAYS"],
-    RETAIL_VELOCITY: ["PRODUCT VARIANT SKU", "VARIANT SKU", "SKU", "NET QUANTITY", "NET ITEMS SOLD", "QTY", "QUANTITY"],
-    COST_WATERFALL: ["SKU", "VARIANT SKU", "LAST PURCHASE PRICE REPORT EEI(UPDATE)", "EEI LAST PURCHASE PRICE", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COTR LAST PURCHASE PRICE", "COST", "UNIT COST"]
-  }
+  HOUSE_BRANDS: ["GLÄS", "GLAS", "GLASTOY"]
 };
 
 const GUARDRAIL_CODES = {
   SAFE: "SAFE",
-  ERR_MISSING_COST: "ERR_MISSING_COST",
-  ERR_NEGATIVE_MARGIN: "ERR_NEGATIVE_MARGIN",
-  ERR_MARGIN_FLOOR_VIOLATOR: "ERR_MARGIN_FLOOR_VIOLATOR",
-  WARN_B2B_HOLD: "WARN_B2B_HOLD"
-};
+  WARN_B2B_HOLD: "WARN_B2B_HOLD",
+  BLOCK_MARGIN_FLOOR: "BLOCK_MARGIN_FLOOR",
 
-const TIER_CODES = {
-  GATEKEEPER: "TIER_00_GATEKEEPER",
-  TOP_HERO: "TIER_10_TOP_HERO",
-  SIG_HERO: "TIER_08_SIG_HERO",
-  PROVEN: "TIER_06_PROVEN_PERFORMER",
-  ACCELERATOR: "TIER_04_ACCELERATOR",
-  CLEARANCE: "TIER_00_CLEARANCE"
+  // Backward-compatible aliases
+  ERR_MISSING_COST: "GK_MISSING_COST",
+  ERR_NEGATIVE_MARGIN: "GK_NEG_MARGIN",
+  ERR_MARGIN_FLOOR_VIOLATOR: "BLOCK_MARGIN_FLOOR"
 };
 
 const GATEKEEPER_CODES = {
+  NONE: "NONE",
+  MISSING_COST: "GK_MISSING_COST",
   GWP: "GK_GWP",
-  NEW_LAUNCH: "GK_NEW_LAUNCH",
+  LAUNCH: "GK_LAUNCH",
+  OOS: "GK_OOS",
   MAP: "GK_MAP",
-  NONE: "NONE"
+  NEG_MARGIN: "GK_NEG_MARGIN",
+
+  // Backward-compatible alias
+  NEW_LAUNCH: "GK_LAUNCH"
 };
 
 const QUEUE_CODES = {
-  QUEUE_1A_COST: "Q1A_MISSING_COST",
-  QUEUE_1A_MARGIN: "Q1A_NEGATIVE_MARGIN",
-  QUEUE_1B_FLOOR: "Q1B_MARGIN_FLOOR",
-  QUEUE_2_WEBONLY: "Q2_WEBONLY_REVIEW",
-  QUEUE_3_CLEARANCE: "Q3_SHARED_CLEARANCE",
-  NONE: "NONE"
+  NONE: "NONE",
+  QUEUE_1A: "QUEUE_1A",
+  QUEUE_1B: "QUEUE_1B",
+  QUEUE_2: "QUEUE_2",
+  QUEUE_3: "QUEUE_3",
+  REORDER_ALERT: "REORDER_ALERT",
+
+  // Backward-compatible aliases
+  QUEUE_1A_COST: "QUEUE_1A",
+  QUEUE_1A_MARGIN: "QUEUE_1A",
+  QUEUE_1B_FLOOR: "QUEUE_1B",
+  QUEUE_2_WEBONLY: "QUEUE_2",
+  QUEUE_3_CLEARANCE: "QUEUE_3"
 };
 
 function logError(module, error) {
-  const msg = `[ERROR][${module}] ${error.stack || error}`;
+  const msg = `[ERROR][${module}] ${error && error.stack ? error.stack : error}`;
   Logger.log(msg);
-  console.error(msg);
 }
 
-/**
- * Standardized Header Index Mapping
- */
 function getHeaderMap(headers) {
-  if (!headers || !Array.isArray(headers)) return {};
+  if (!Array.isArray(headers)) return {};
   const map = {};
   headers.forEach((h, i) => {
-    if (h !== null && h !== undefined && h.toString().trim() !== "") {
-      map[h.toString().trim().toUpperCase()] = i;
-    }
+    const key = safeStr(h).toUpperCase();
+    if (key) map[key] = i;
   });
   return map;
 }
 
-/**
- * Standardized header formatting across the reporting suite.
- */
 function applyHeaderStyle(range) {
-  range.setBackground(VDM_CONFIG.DESIGN.HEADER_BG)
-       .setFontColor(VDM_CONFIG.DESIGN.HEADER_TEXT)
-       .setFontWeight("bold")
-       .setHorizontalAlignment("center");
+  range.setFontWeight("bold").setHorizontalAlignment("center");
 }
 
-/**
- * Type-safe string conversion
- */
 function safeStr(val) {
   return val === null || val === undefined ? "" : String(val).trim();
 }
 
-/**
- * Type-safe number conversion with percentage/currency cleaning
- */
 function safeNum(val) {
   if (val === null || val === undefined || val === "") return null;
   if (typeof val === "number") return isNaN(val) ? null : val;
   const str = String(val).trim();
   const n = parseFloat(str.replace(/[$,%\s]/g, "").replace(/,/g, ""));
   if (isNaN(n)) return null;
-  return str.includes("%") ? n / 100 : n;
+  return str.indexOf("%") !== -1 ? n / 100 : n;
 }
 
-/**
- * Math validity check for division and comparisons
- */
-function mathGuard(...values) {
-  return values.every(v => typeof v === 'number' && v !== null && !isNaN(v));
+function mathGuard() {
+  return Array.prototype.slice.call(arguments).every(v => typeof v === "number" && !isNaN(v));
 }
 
-/**
- * Pure helper: resolves an operational folder ID from a property value and a
- * legacy config value. Separated from PropertiesService for testability.
- *
- * @param {string|null} propertyValue  Value from Script Property VDM_FOLDER_ID.
- * @param {string}      legacyValue    Value from VDM_CONFIG.FOLDER_ID.
- * @returns {string} The resolved folder ID.
- * @throws {Error} If neither source yields a non-empty ID.
- */
 function resolveOperationalFolderId(propertyValue, legacyValue) {
   const resolved = (propertyValue && propertyValue.trim()) || (legacyValue && legacyValue.trim()) || "";
   if (!resolved) {
@@ -185,17 +154,71 @@ function resolveOperationalFolderId(propertyValue, legacyValue) {
   return resolved;
 }
 
-/**
- * Returns the operational Drive folder ID for this deployment.
- * Reads the Script Property VDM_FOLDER_ID first; falls back to the
- * legacy VDM_CONFIG.FOLDER_ID value for backward compatibility.
- *
- * @returns {string} The resolved Drive folder ID.
- * @throws {Error} If neither source yields a non-empty ID.
- */
 function getOperationalFolderId() {
-  const propertyValue = PropertiesService
-    .getScriptProperties()
-    .getProperty("VDM_FOLDER_ID");
+  const propertyValue = PropertiesService.getScriptProperties().getProperty("VDM_FOLDER_ID");
   return resolveOperationalFolderId(propertyValue, VDM_CONFIG.FOLDER_ID);
+}
+
+function loadControlPanelConfig(ss) {
+  const sheet = ss.getSheetByName(VDM_CONFIG.TABS.CONTROL);
+  const data = sheet ? sheet.getDataRange().getValues() : [];
+
+  const skuSetFromColumn = colIndex => {
+    const set = new Set();
+    for (let i = 1; i < data.length; i++) {
+      const key = safeStr(data[i][colIndex]).toUpperCase();
+      if (key) set.add(key);
+    }
+    return set;
+  };
+
+  const vendorSetFromColumn = colIndex => {
+    const set = new Set();
+    for (let i = 1; i < data.length; i++) {
+      const key = safeStr(data[i][colIndex]).toUpperCase();
+      if (key) set.add(key);
+    }
+    return set;
+  };
+
+  const boolFromCell = value => {
+    if (value === true || value === false) return value;
+    const normalized = safeStr(value).toUpperCase();
+    if (!normalized) return VDM_CONFIG.DEFAULTS.ENFORCE_OOS_REVERSION;
+    return normalized === "TRUE" || normalized === "YES" || normalized === "1";
+  };
+
+  const b2bReserveMinRaw = data[1] ? safeNum(data[1][3]) : null;
+  const affiliateRateRaw = data[1] ? safeNum(data[1][4]) : null;
+  const virtualPrefixesRaw = data
+    .slice(1)
+    .map(r => safeStr(r[5]))
+    .filter(Boolean)
+    .join(",");
+  const domesticLeadRaw = data[1] ? safeNum(data[1][6]) : null;
+  const importLeadRaw = data[1] ? safeNum(data[1][7]) : null;
+  const oosToggleRaw = data[1] ? data[1][8] : null;
+
+  return {
+    gwpSkus: skuSetFromColumn(0),
+    newLaunchSkus: skuSetFromColumn(1),
+    mapVendors: vendorSetFromColumn(2),
+    b2bReserveMinQty: b2bReserveMinRaw !== null && b2bReserveMinRaw > 0
+      ? Math.round(b2bReserveMinRaw)
+      : VDM_CONFIG.DEFAULTS.B2B_RESERVE_MIN_QTY,
+    affiliateRate: affiliateRateRaw !== null && affiliateRateRaw >= 0 && affiliateRateRaw < 1
+      ? affiliateRateRaw
+      : VDM_CONFIG.DEFAULTS.AFFILIATE_RATE,
+    virtualSkuPrefixes: virtualPrefixesRaw
+      .split(",")
+      .map(p => safeStr(p).toUpperCase())
+      .filter(Boolean),
+    defaultDomesticLeadTime: domesticLeadRaw !== null && domesticLeadRaw > 0
+      ? Math.round(domesticLeadRaw)
+      : VDM_CONFIG.DEFAULTS.DOMESTIC_LEAD_DAYS,
+    defaultImportLeadTime: importLeadRaw !== null && importLeadRaw > 0
+      ? Math.round(importLeadRaw)
+      : VDM_CONFIG.DEFAULTS.IMPORT_LEAD_DAYS,
+    enforceOosReversion: boolFromCell(oosToggleRaw)
+  };
 }
