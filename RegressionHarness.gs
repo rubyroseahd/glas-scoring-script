@@ -332,7 +332,11 @@ function runRegressionHarness() {
       clearContents: function() { calls.push("clearContents"); return mockBiSheet; },
       getMaxColumns: function() { return 4; },
       getColumnGroupDepth: function(col) { return depthByCol[col] || 0; },
-      removeColumnGroup: function(col) { calls.push("removeColumnGroup:" + col); return mockBiSheet; },
+      getColumnGroup: function(col, depth) {
+        return depthByCol[col] >= depth
+          ? { remove: function() { calls.push("removeColumnGroup:" + col); } }
+          : null;
+      },
       clearFormats: function() { calls.push("clearFormats"); return mockBiSheet; },
       setFrozenRows: function(n) { calls.push("setFrozenRows:" + n); return mockBiSheet; },
       setFrozenColumns: function(n) { calls.push("setFrozenColumns:" + n); return mockBiSheet; },
@@ -349,7 +353,7 @@ function runRegressionHarness() {
     assertions.push(assertCondition("Case 27: filter.remove not called on BI reset", calls.indexOf("filter.remove") === -1));
   })();
 
-  // Case 28: resetSheetColumnGroups safely bypasses when API surface is unavailable
+  // Case 27a: resetSheetColumnGroups safely bypasses when API surface is unavailable
   (function() {
     var bypassed = true;
     try {
@@ -357,27 +361,27 @@ function runRegressionHarness() {
     } catch (err) {
       bypassed = false;
     }
-    assertions.push(assertCondition("Case 28: resetSheetColumnGroups bypasses sheets without group APIs", bypassed));
+    assertions.push(assertCondition("Case 27a: resetSheetColumnGroups bypasses sheets without group APIs", bypassed));
   })();
 
-  // Case 29: safelyCollapseColumnGroup honors depth guard
+  // Case 27b: safelyCollapseColumnGroup honors depth guard
   (function() {
     var lowDepthCollapseCalls = 0;
     safelyCollapseColumnGroup({
       getColumnGroupDepth: function() { return 0; },
       collapseColumnGroup: function() { lowDepthCollapseCalls++; }
     }, 13, 1);
-    assertions.push(assertCondition("Case 29: collapse is skipped when group depth is too low", lowDepthCollapseCalls === 0));
+    assertions.push(assertCondition("Case 27b: collapse is skipped when group depth is too low", lowDepthCollapseCalls === 0));
 
     var collapseArgs = null;
     safelyCollapseColumnGroup({
       getColumnGroupDepth: function() { return 2; },
       collapseColumnGroup: function(col, depth) { collapseArgs = [col, depth]; }
     }, 13, 1);
-    assertions.push(assertCondition("Case 29: collapse executes only when group depth is adequate", collapseArgs && collapseArgs[0] === 13 && collapseArgs[1] === 1));
+    assertions.push(assertCondition("Case 27b: collapse executes only when group depth is adequate", collapseArgs && collapseArgs[0] === 13 && collapseArgs[1] === 1));
   })();
 
-  // Case 30: Warehouse aggregate reads normalized staging tabs (header row 1, data row 2+)
+  // Case 28: Warehouse aggregate reads normalized staging tabs (header row 1, data row 2+)
   (function() {
     const sheet = {
       getDataRange: function() {

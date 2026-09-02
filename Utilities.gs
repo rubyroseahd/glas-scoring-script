@@ -102,12 +102,13 @@ function resetSheetColumnGroups(sheet) {
   try {
     if (typeof sheet.getMaxColumns !== "function" ||
         typeof sheet.getColumnGroupDepth !== "function" ||
-        typeof sheet.removeColumnGroup !== "function") return;
+        typeof sheet.getColumnGroup !== "function") return;
     const maxCols = sheet.getMaxColumns();
     for (let col = maxCols; col >= 1; col--) {
       const depth = sheet.getColumnGroupDepth(col);
       for (let d = depth; d >= 1; d--) {
-        sheet.removeColumnGroup(col);
+        const group = sheet.getColumnGroup(col, d);
+        if (group && typeof group.remove === "function") group.remove();
       }
     }
   } catch (e) {
