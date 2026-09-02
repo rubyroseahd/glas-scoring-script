@@ -39,7 +39,11 @@ The ingestion/staging layer uses `shopify_export`, `shopify_90day_sales`, `eei_u
 
 ## 2. Data Ingestion & Staging Contract
 
-Place one current copy of each required CSV into the Google Drive folder configured by `VDM_CONFIG.FOLDER_ID`. Source file names are exact and case-sensitive operational identifiers.
+Place one current copy of each required CSV into the Google Drive folder resolved by script configuration:
+- Primary: Script Property `VDM_FOLDER_ID`
+- Legacy fallback: `VDM_CONFIG.FOLDER_ID` in `Config.gs`
+
+Source file names are exact and case-sensitive operational identifiers.
 
 ### Required source-file-to-workbook-tab mapping
 
