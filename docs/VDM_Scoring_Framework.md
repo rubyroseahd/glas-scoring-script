@@ -30,7 +30,7 @@ Required sales-tab failure messaging:
 | `shopify_export_gt.csv` | Price | `VARIANT PRICE`, `PRICE` |
 | `shopify_export_gt.csv` | Type | `TYPE`, `PRODUCT TYPE` |
 | `Cost_Data.csv` | SKU | `SKU`, `VARIANT SKU` |
-| `Cost_Data.csv` | Cost inputs | `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, `COST`, `UNIT COST`, `COST PER ITEM` |
+| `Cost_Data.csv` | Cost inputs | `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, `COST`, `UNIT COST` |
 | `Total sales by product.csv` | SKU | `PRODUCT VARIANT SKU`, `VARIANT SKU`, `SKU` |
 | `Total sales by product.csv` | Quantity | `NET QUANTITY`, `NET ITEMS SOLD`, `QTY`, `QUANTITY` |
 | `EEI USA Whse Stock Report.csv` | SKU | `ITEM CODE`, `SKU` |

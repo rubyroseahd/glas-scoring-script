@@ -110,7 +110,7 @@ function ingestGenericCSV(folder, fileName, tabName, skuHeader, ss) {
   const hMap = getHeaderMap(headers);
   if (tabName === VDM_CONFIG.TABS.RAW_COST) {
     getFirstAvailableHeader(hMap, ["SKU", "VARIANT SKU"]);
-    getFirstAvailableHeader(hMap, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST", "COST PER ITEM"]);
+    getFirstAvailableHeader(hMap, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST"]);
   }
   const resolvedSkuHeader = findFirstAvailableHeader(hMap, [skuHeader, "VARIANT SKU", "SKU"]) || safeStr(skuHeader).toUpperCase();
   const skuIdx = hMap[resolvedSkuHeader];
@@ -169,8 +169,7 @@ function executeCostResolutionWaterfall() {
     glas: cIdxMap["GLAS COSTING"],
     cotrUpdate: cIdxMap["LAST PURCHASE PRICE REPORT COTR(UPDATE)"],
     cost: cIdxMap["COST"],
-    unitCost: cIdxMap["UNIT COST"],
-    costPerItem: cIdxMap["COST PER ITEM"]
+    unitCost: cIdxMap["UNIT COST"]
   };
 
   const costMap = new Map();
@@ -210,7 +209,6 @@ function resolveWaterfallCost(costRow, costIndexes, shopifyCost) {
     getNumericAt(costRow, costIndexes.cotrUpdate),
     getNumericAt(costRow, costIndexes.cost),
     getNumericAt(costRow, costIndexes.unitCost),
-    getNumericAt(costRow, costIndexes.costPerItem),
     shopifyCost
   ];
   for (let i = 0; i < candidates.length; i++) {
@@ -364,5 +362,5 @@ function validateCostHeaders(folder) {
   const data = loadCsvFile(folder, VDM_CONFIG.SOURCE_FILES.COST);
   const headers = getHeaderMap(data[0]);
   getFirstAvailableHeader(headers, ["SKU", "VARIANT SKU"]);
-  getFirstAvailableHeader(headers, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST", "COST PER ITEM"]);
+  getFirstAvailableHeader(headers, ["LAST PURCHASE PRICE REPORT EEI(UPDATE)", "GLAS COSTING", "LAST PURCHASE PRICE REPORT COTR(UPDATE)", "COST", "UNIT COST"]);
 }

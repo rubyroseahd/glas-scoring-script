@@ -81,7 +81,7 @@ Place one current copy of each required CSV into the Google Drive folder configu
 - Headers must be on **row 1**; data starts on **row 2**.
 - Required headers:
   - SKU: `SKU` or `VARIANT SKU`
-  - Cost: `COST`, `UNIT COST`, `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, or `COST PER ITEM`
+  - Cost: `COST`, `UNIT COST`, `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, or `COTR LAST PURCHASE PRICE`
 - Supported waterfall fields are `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, `COST`, and `UNIT COST` with Shopify `COST PER ITEM` fallback.
 - Resolved cost precedence is: **EEI last purchase price → GLAS costing → COTR last purchase price → Cost → Unit Cost → Shopify Cost per item → 0**.
 
