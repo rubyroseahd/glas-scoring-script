@@ -91,7 +91,7 @@ Expected source files and workbook tabs include:
   - Type: `TYPE` or `PRODUCT TYPE`
 - `Cost_Data.csv`
   - SKU: `SKU` or `VARIANT SKU`
-  - Cost: `COST`, `UNIT COST`, `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, `COTR LAST PURCHASE PRICE`, or `COST PER ITEM`
+  - Cost: `COST`, `UNIT COST`, `EEI LAST PURCHASE PRICE`, `GLAS COSTING`, or `COTR LAST PURCHASE PRICE`
 - `Total sales by product.csv`
   - SKU: `PRODUCT VARIANT SKU`, `VARIANT SKU`, or `SKU`
   - Quantity: `NET QUANTITY`, `NET ITEMS SOLD`, `QTY`, or `QUANTITY`

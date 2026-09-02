@@ -96,6 +96,10 @@ function runRegressionHarness() {
   );
   assertions.push(assertEqual("cost waterfall priority uses EEI update first", prioritizedCost, 9));
 
+  // Case 7b: MAP vendor matching stays exact after normalization
+  assertions.push(assertCondition("MAP vendor exact match ignores case/whitespace", isMapVendorMatch(" acme ", ["ACME"])));
+  assertions.push(assertCondition("MAP vendor partial word match is rejected", !isMapVendorMatch("ACME TOYS", ["ACME"])));
+
   // Case 8: Cost waterfall preserves an explicit numeric zero at the highest-priority column
   const zeroCost = resolveWaterfallCost(
     ["SKU2", 0, 5, 8, null, 11],
@@ -119,6 +123,26 @@ function runRegressionHarness() {
     17
   );
   assertions.push(assertEqual("cost waterfall falls back to shopify cost when all columns are null", shopifyFallbackCost, 17));
+
+  // Case 9b: External COST PER ITEM is ignored; Shopify native cost remains the fallback
+  const ignoredExternalCostPerItem = resolveWaterfallCost(
+    ["SKU5", null, null, null, null, null, 99],
+    { eeiUpdate: 1, glas: 2, cotrUpdate: 3, cost: 4, unitCost: 5, costPerItem: 6 },
+    17
+  );
+  assertions.push(assertEqual("cost waterfall ignores external cost per item and uses shopify fallback", ignoredExternalCostPerItem, 17));
+
+  // Case 9c: Cost header aliases accept the short EEI/COTR names used in docs/sample data
+  const shortAliasCostIndexes = getCostWaterfallIndexes(getHeaderMap([
+    "SKU",
+    "EEI LAST PURCHASE PRICE",
+    "GLAS COSTING",
+    "COTR LAST PURCHASE PRICE",
+    "COST",
+    "UNIT COST"
+  ]));
+  assertions.push(assertEqual("cost header alias resolves short eei name", shortAliasCostIndexes.eeiUpdate, 1));
+  assertions.push(assertEqual("cost header alias resolves short cotr name", shortAliasCostIndexes.cotrUpdate, 3));
 
   // Case 10: stripDuplicateSuffix removes ` (N)` before extension
   assertions.push(assertEqual("stripDuplicateSuffix removes (1)", stripDuplicateSuffix("shopify_export_gt (1).csv"), "shopify_export_gt.csv"));
